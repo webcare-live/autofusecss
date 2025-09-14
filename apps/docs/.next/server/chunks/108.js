@@ -1,0 +1,1 @@
+"use strict";exports.id=108,exports.ids=[108],exports.modules={108:(s,e,o)=>{o.r(e),o.d(e,{CodeTabs:()=>r,default:()=>a});var t=o(8570);let r=(0,t.createProxy)(String.raw`/Users/ivancirlig/Desktop/autofusecss/apps/docs/components/CodeTabs.tsx#CodeTabs`),a=(0,t.createProxy)(String.raw`/Users/ivancirlig/Desktop/autofusecss/apps/docs/components/CodeTabs.tsx#default`)}};

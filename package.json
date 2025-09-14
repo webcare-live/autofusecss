@@ -1,0 +1,79 @@
+{
+  "name": "autofusecss",
+  "version": "0.0.1",
+  "description": "React-first CSS utilities and tokens with fluid scales and Tailwind integration.",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js",
+      "require": "./dist/react/index.cjs"
+    },
+    "./tailwind": {
+      "types": "./dist/tailwind/index.d.ts",
+      "import": "./dist/tailwind/index.js",
+      "require": "./dist/tailwind/index.cjs"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "bin": {
+    "autofusecss": "./dist/cli.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/react/index.ts src/tailwind/index.ts src/cli.ts --format esm,cjs --dts --clean && cpx src/css/styles.css dist",
+    "type-check": "echo autofusecss placeholder type-check skipped",
+    "dev": "tsup src/index.ts --format esm,cjs --watch --dts",
+    "prepublishOnly": "pnpm build",
+    "docs:dev": "npm --prefix apps/docs run dev",
+    "docs:build": "npm --prefix apps/docs run build",
+    "tokens:server": "ts-node-esm server/tokens-server.ts"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "dependencies": {
+    "deepmerge": "^4.3.1"
+  },
+  "optionalDependencies": {
+    "tailwindcss": "^3 || ^4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.4.0",
+    "@types/react": "^19.1.13",
+    "cpx": "^1.5.0",
+    "tsup": "^8.1.0",
+    "typescript": "^5.9.2",
+    "ts-node": "^10.9.2",
+    "@types/ws": "^8.5.10",
+    "ws": "^8.17.1",
+    "express": "^4.19.2"
+  },
+  "keywords": [
+    "css",
+    "react",
+    "tokens",
+    "tailwind",
+    "design-system",
+    "utilities",
+    "fluid",
+    "clamp"
+  ]
+}

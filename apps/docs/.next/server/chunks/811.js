@@ -1,0 +1,1 @@
+"use strict";exports.id=811,exports.ids=[811],exports.modules={8811:(s,r,e)=>{e.r(r),e.d(r,{Playground:()=>t,default:()=>a});var o=e(8570);let t=(0,o.createProxy)(String.raw`/Users/ivancirlig/Desktop/autofusecss/apps/docs/components/Playground.tsx#Playground`),a=(0,o.createProxy)(String.raw`/Users/ivancirlig/Desktop/autofusecss/apps/docs/components/Playground.tsx#default`)}};
