@@ -1,1 +1,10 @@
-node_modules/\n.turbo/\ntsconfig.tsbuildinfo
+node_modules/
+.turbo/
+tsconfig.tsbuildinfo
+dist/
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
