@@ -15,7 +15,7 @@ declare function useAutofuse(): AutofuseContextValue;
 
 declare function ThemeStudio(): react_jsx_runtime.JSX.Element;
 
-declare function AcssImportWizard({ current, onApply }: {
+declare function AcssImportWizard({ current, onApply, }: {
     current: AutofuseTokens;
     onApply: (patch: Partial<AutofuseTokens>) => void;
 }): react_jsx_runtime.JSX.Element;
