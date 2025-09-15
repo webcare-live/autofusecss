@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "^14.2.5",
@@ -18,6 +19,10 @@
     "autofusecss": "file:../..",
     "react-live": "^4.1.6",
     "prism-react-renderer": "^2.3.1",
-    "clsx": "^2.1.1"
+    "clsx": "^2.1.1",
+    "github-slugger": "^2.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.1"
   }
 }

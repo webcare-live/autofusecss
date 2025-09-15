@@ -16,12 +16,14 @@ Core UI
 - Spacing: base step (px), steps count; preview stack and grid gaps
 - Radius & Shadows: presets with preview cards
 - Live updates: WebSocket connect field; applies external `tokens:update`
+ - Broadcast: Studio sends `tokens:update` on local edits for multi-client sync (implemented)
 
 Export & Persistence
 - Export button: downloads `autofusecss.config.mjs` with current tokens (implemented)
 - Import JSON: upload tokens JSON to merge (implemented)
 - Save button (if API enabled): `PUT /api/tokens` (implemented)
 - WebSocket connect: `ws://localhost:4001` by default; listens to `tokens:update` (implemented)
+ - Broadcast on edit to WS server (implemented)
 
 Developer API
 - `useAutofuse()` returns `{ tokens, setTokens, theme, setTheme, density, setDensity }`

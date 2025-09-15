@@ -5,6 +5,8 @@ Core
 - [x] React Provider + runtime context/hook
 - [x] ThemeStudio (palette, radius, shadows, export)
   - [x] Import JSON, WS receive updates, contrast checker, auto shade generation
+  - [x] WS broadcast from Studio + optimistic merge
+  - [x] OKLCH generator + AAA auto-fix suggestions
 - [x] Tailwind plugin (spacing, stack, grid, flex, text, colors, radius, shadows, ring)
 - [x] Utilities expanded: borders, dividers, display/visibility, opacity, position/z-index
 
@@ -14,9 +16,11 @@ Docs Site
 - [x] Utilities index auto-listing
 - [x] Studio page (client) under `/studio`
 - [x] Minimal API route `/api/tokens` for persistence
-  - [x] Sidebar nav
-  - [x] MDX components: Callout, CodeTabs, Playground
-  - [ ] Client-side search (filename filter)
+- [x] Sidebar nav
+- [x] MDX components: Callout, CodeTabs, Playground
+- [ ] Client-side search (filename filter)
+  - [x] Search across headings (slugged anchors)
+  - [x] Active link highlighting
 
 Servers
 - [x] Standalone tokens server (Express + ws)
@@ -28,6 +32,7 @@ Next Up
   - [x] Initial forms/elements/overlays recipes in base CSS
 - [ ] Recipes: buttons, cards, inputs, layout blocks
   - [x] Initial CSS added: `.af-btn`, `.af-card`, `.af-input`, `.af-chip`
+  - [x] Tokenized color variants via plugin for `.af-btn-{role}` and outline
 - [ ] Docs site search + sidebar nav
 - [ ] MDX components for callouts, code tabs, and playground embeds
 - [ ] Color contrast checker in Studio

@@ -8,3 +8,11 @@ dist/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Next.js build artifacts
+.next/
+.vercel/
+
+# Output files
+autofuse.css
+autofuse-core.css

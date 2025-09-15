@@ -10,6 +10,7 @@ export interface AutofuseProviderProps {
   theme?: "light" | "dark" | "hc";
   density?: "comfortable" | "compact";
   as?: keyof React.JSX.IntrinsicElements;
+  anchorOffset?: number | string; // scroll-margin-top for headings in docs/apps
 }
 
 export function AutofuseProvider({
@@ -17,6 +18,7 @@ export function AutofuseProvider({
   theme: themeProp = "light",
   density: densityProp = "comfortable",
   as = "div",
+  anchorOffset,
   children,
 }: PropsWithChildren<AutofuseProviderProps>) {
   const Component: any = as;
@@ -33,7 +35,8 @@ export function AutofuseProvider({
   const vars = useMemo(() => buildCssVariables(merged), [merged]);
 
   // Inline style avoids FOUC/SSR mismatch by hydrating with computed variables
-  const styleTag = `/* autofusecss variables */\n${vars.css}`;
+  const extraVars = anchorOffset != null ? `\n:root{--af-anchor-offset:${typeof anchorOffset === 'number' ? `${anchorOffset}px` : anchorOffset};}` : '';
+  const styleTag = `/* autofusecss variables */\n${vars.css}${extraVars}`;
 
   return (
     <Component data-theme={theme} data-density={density}>

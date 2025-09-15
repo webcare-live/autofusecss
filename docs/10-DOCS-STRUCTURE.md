@@ -66,6 +66,7 @@ File mapping
 - docs/utilities/*.md (one file per category above)
 - docs/guides/*.md
 - docs/reference/*.md
+- docs/plans/* (roadmap, checklists, site plan)
+- docs/implemented/* (what’s shipped + file map)
 
 Next step: populate docs/utilities with stubs and checklists (added in this change).
-

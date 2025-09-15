@@ -5,7 +5,7 @@ We ship simple MDX components for interactive docs in the Next.js site.
 Available components
 - `Callout` — content box with types: `info | warn | success | danger`
 - `CodeTabs` — switch between multiple code blocks
-- `Playground` — live React code editor/preview (uses react-live)
+- `Playground` — live React code editor/preview (uses react-live) with Copy button
 
 Usage
 
@@ -21,4 +21,3 @@ Usage
 ```
 
 These components are wired automatically in the docs renderer (`apps/docs/lib/mdx.ts`).
-

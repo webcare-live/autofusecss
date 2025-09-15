@@ -1,5 +1,6 @@
 import '../../../src/css/styles.css';
 import ClientProvider from '../components/ClientProvider';
+import HeaderControls from '../components/HeaderControls';
 import React from 'react';
 import Sidebar from '../components/Sidebar';
 
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <a href="/utilities">Utilities</a>
                 <a href="/studio">Studio</a>
               </nav>
+              <HeaderControls />
             </header>
             <Sidebar />
             <main>{children}</main>

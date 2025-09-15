@@ -7,16 +7,20 @@ Transport
 - REST for persistence, WebSocket (or SSE) for live updates.
 
 Endpoints
-- GET /api/tokens → returns current tokens (AutofuseTokens)
-- PUT /api/tokens → replaces tokens; body: { tokens: Partial<AutofuseTokens> }
-- PATCH /api/tokens → deep‑merges partial tokens
+- GET /api/tokens?room=default → returns current tokens (AutofuseTokens)
+- PUT /api/tokens?room=default → replaces tokens; body: { tokens: Partial<AutofuseTokens> }
+- PATCH /api/tokens?room=default → deep‑merges partial tokens
+- GET /api/rooms → list known rooms
+- GET /api/tokens/history?room=default → recent token revisions
 
 WebSocket Events
-- Client subscribes to `ws://host/ws`
+- Client subscribes to `ws://host/ws?room=<room>&token=<token>`
 - Server pushes `{ type: 'tokens:update', tokens }` on change
+- Clients may also send `{ type: 'tokens:update', tokens }` to broadcast changes (implemented)
+- Auth: if `AUTH_TOKEN` env var is set on server, the `token` query must match
 
 Storage
-- File: local `autofuse.tokens.json` by default
+- File: `.data/<room>/tokens.json` by default
 - Or database (Mongo/Postgres) via adapter interface
 
 Security
@@ -48,4 +52,3 @@ app.listen(4001);
 Client usage
 - On app start, fetch tokens → pass to `<AutofuseProvider tokens={...} />`
 - Subscribe to WS to apply live updates via `setTokens(patch)` from `useAutofuse()`
-

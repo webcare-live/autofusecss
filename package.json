@@ -37,7 +37,8 @@
     "prepublishOnly": "pnpm build",
     "docs:dev": "npm --prefix apps/docs run dev",
     "docs:build": "npm --prefix apps/docs run build",
-    "tokens:server": "ts-node-esm server/tokens-server.ts"
+    "tokens:server": "ts-node-esm server/tokens-server.ts",
+    "test": "vitest run"
   },
   "sideEffects": [
     "**/*.css"
@@ -50,7 +51,8 @@
     "react-dom": ">=18"
   },
   "dependencies": {
-    "deepmerge": "^4.3.1"
+    "deepmerge": "^4.3.1",
+    "culori": "^4.0.1"
   },
   "optionalDependencies": {
     "tailwindcss": "^3 || ^4"
@@ -64,7 +66,8 @@
     "ts-node": "^10.9.2",
     "@types/ws": "^8.5.10",
     "ws": "^8.17.1",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "vitest": "^2.0.5"
   },
   "keywords": [
     "css",

@@ -10,6 +10,9 @@ Examples
 
 ```
 <button class="af-btn af-btn-primary">Primary</button>
+<button class="af-btn af-btn-primary af-btn-sm">Small</button>
+<button class="af-btn af-btn-primary af-btn-lg">Large</button>
+<button class="af-btn af-btn-primary" disabled>Disabled</button>
 <button class="af-btn af-btn-outline">Outline</button>
 
 <div class="af-card af-stack-2">
