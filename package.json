@@ -31,7 +31,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/react/index.ts src/tailwind/index.ts src/cli.ts --format esm,cjs --dts --clean && cpx src/css/styles.css dist",
+    "build": "tsup src/index.ts src/react/index.ts src/tailwind/index.ts src/cli.ts --format esm,cjs --dts --clean && cpy src/css/styles.css dist",
     "type-check": "echo autofusecss placeholder type-check skipped",
     "dev": "tsup src/index.ts --format esm,cjs --watch --dts",
     "prepublishOnly": "pnpm build",
@@ -51,8 +51,8 @@
     "react-dom": ">=18"
   },
   "dependencies": {
-    "deepmerge": "^4.3.1",
-    "culori": "^4.0.1"
+    "culori": "^4.0.1",
+    "deepmerge": "^4.3.1"
   },
   "optionalDependencies": {
     "tailwindcss": "^3 || ^4"
@@ -60,14 +60,14 @@
   "devDependencies": {
     "@types/node": "^24.4.0",
     "@types/react": "^19.1.13",
-    "cpx": "^1.5.0",
+    "@types/ws": "^8.5.10",
+    "cpy-cli": "^6.0.0",
+    "express": "^4.19.2",
+    "ts-node": "^10.9.2",
     "tsup": "^8.1.0",
     "typescript": "^5.9.2",
-    "ts-node": "^10.9.2",
-    "@types/ws": "^8.5.10",
-    "ws": "^8.17.1",
-    "express": "^4.19.2",
-    "vitest": "^2.0.5"
+    "vitest": "^3.2.4",
+    "ws": "^8.17.1"
   },
   "keywords": [
     "css",

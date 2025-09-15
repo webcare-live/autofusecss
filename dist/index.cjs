@@ -141,6 +141,7 @@ function AutofuseProvider({
   theme: themeProp = "light",
   density: densityProp = "comfortable",
   as = "div",
+  anchorOffset,
   children
 }) {
   const Component = as;
@@ -151,8 +152,10 @@ function AutofuseProvider({
     return (0, import_deepmerge.default)((0, import_deepmerge.default)(defaultTokens, tokens || {}), localTokens || {});
   }, [tokens, localTokens]);
   const vars = (0, import_react2.useMemo)(() => buildCssVariables(merged), [merged]);
+  const extraVars = anchorOffset != null ? `
+:root{--af-anchor-offset:${typeof anchorOffset === "number" ? `${anchorOffset}px` : anchorOffset};}` : "";
   const styleTag = `/* autofusecss variables */
-${vars.css}`;
+${vars.css}${extraVars}`;
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Component, { "data-theme": theme, "data-density": density, children: [
     /* @__PURE__ */ (0, import_jsx_runtime.jsx)("style", { dangerouslySetInnerHTML: { __html: styleTag } }),
     /* @__PURE__ */ (0, import_jsx_runtime.jsx)(

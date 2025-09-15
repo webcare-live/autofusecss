@@ -8,7 +8,8 @@ interface AutofuseProviderProps {
     theme?: "light" | "dark" | "hc";
     density?: "comfortable" | "compact";
     as?: keyof React.JSX.IntrinsicElements;
+    anchorOffset?: number | string;
 }
-declare function AutofuseProvider({ tokens, theme: themeProp, density: densityProp, as, children, }: PropsWithChildren<AutofuseProviderProps>): react_jsx_runtime.JSX.Element;
+declare function AutofuseProvider({ tokens, theme: themeProp, density: densityProp, as, anchorOffset, children, }: PropsWithChildren<AutofuseProviderProps>): react_jsx_runtime.JSX.Element;
 
 export { AutofuseProvider, type AutofuseProviderProps, AutofuseTokens };
