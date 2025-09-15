@@ -4,12 +4,12 @@
   "description": "React-first CSS utilities and tokens with fluid scales and Tailwind integration.",
   "type": "module",
   "main": "dist/index.cjs",
-  "module": "dist/index.mjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
+      "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./react": {
@@ -51,7 +51,7 @@
     "react-dom": ">=18"
   },
   "dependencies": {
-    "culori": "^4.0.1",
+    "culori": "^4.0.2",
     "deepmerge": "^4.3.1"
   },
   "optionalDependencies": {
@@ -64,7 +64,7 @@
     "cpy-cli": "^6.0.0",
     "express": "^4.19.2",
     "ts-node": "^10.9.2",
-    "tsup": "^8.1.0",
+    "tsup": "^8.5.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4",
     "ws": "^8.17.1"
