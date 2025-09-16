@@ -3,6 +3,7 @@ export { d as defaultTokens } from '../tokens-CFYw5wM2.cjs';
 
 interface AutofuseTailwindOptions {
     tokens?: Partial<AutofuseTokens>;
+    layer?: 'base' | 'components' | 'utilities';
 }
 declare function autofusePlugin(_opts?: AutofuseTailwindOptions): any;
 

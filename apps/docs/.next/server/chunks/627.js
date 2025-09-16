@@ -1,1 +1,0 @@
-"use strict";exports.id=627,exports.ids=[627],exports.modules={4627:(s,t,e)=>{e.r(t),e.d(t,{Callout:()=>r,default:()=>a});var o=e(8570);let r=(0,o.createProxy)(String.raw`/Users/ivancirlig/Desktop/autofusecss/apps/docs/components/Callout.tsx#Callout`),a=(0,o.createProxy)(String.raw`/Users/ivancirlig/Desktop/autofusecss/apps/docs/components/Callout.tsx#default`)}};

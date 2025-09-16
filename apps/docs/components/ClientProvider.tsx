@@ -1,7 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import { AutofuseProvider } from 'autofusecss/react';
+import { modernTokens } from 'autofusecss';
 
 type DocsConfig = { anchorOffset: number | string; setAnchorOffset: (v: number | string) => void };
 const DocsConfigContext = createContext<DocsConfig | null>(null);
@@ -12,16 +13,27 @@ export function useDocsConfig() {
 }
 
 export default function ClientProvider({ children }: { children: React.ReactNode }) {
-  const [anchorOffset, setAnchorOffset] = useState<number | string>(() => {
-    if (typeof window === 'undefined') return 80;
-    const v = localStorage.getItem('af-anchor-offset');
-    return v ? (isNaN(Number(v)) ? v : Number(v)) : 80;
-  });
+  // Use a deterministic initial value for SSR to prevent hydration mismatches.
+  const [anchorOffset, setAnchorOffset] = useState<number | string>(80);
+  // Load any persisted value after hydration.
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('af-anchor-offset');
+      if (v != null) setAnchorOffset(isNaN(Number(v)) ? v : Number(v));
+    } catch {}
+  }, []);
   const ctx = useMemo<DocsConfig>(() => ({ anchorOffset, setAnchorOffset: (v) => { setAnchorOffset(v); try { localStorage.setItem('af-anchor-offset', String(v)); } catch {} } }), [anchorOffset]);
 
   return (
     <DocsConfigContext.Provider value={ctx}>
-      <AutofuseProvider anchorOffset={anchorOffset}>{children}</AutofuseProvider>
+      <AutofuseProvider
+        tokens={modernTokens}
+        theme="dark"
+        density="compact"
+        anchorOffset={anchorOffset}
+      >
+        {children}
+      </AutofuseProvider>
     </DocsConfigContext.Provider>
   );
 }

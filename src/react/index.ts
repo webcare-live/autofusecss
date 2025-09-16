@@ -1,3 +1,5 @@
+"use client";
+
 export { AutofuseProvider } from "./Provider.js";
 export type { AutofuseProviderProps } from "./Provider.js";
 export { useAutofuse } from "./context.js";

@@ -3,8 +3,9 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { filePathFromSlug, loadDocByPath } from '../../../lib/mdx';
 
-export default async function DocPage({ params }: { params: { slug?: string[] } }) {
-  const slug = params.slug || [];
+// Next.js 15: params are async (Promise)
+export default async function DocPage({ params }: { params: Promise<{ slug?: string[] }> }) {
+  const { slug = [] } = await params;
   if (slug.length === 0) return notFound();
   const fp = filePathFromSlug(slug);
   try {

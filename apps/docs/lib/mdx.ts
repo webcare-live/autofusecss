@@ -1,4 +1,4 @@
-import { compileMDX } from 'next-mdx-remote/rsc';
+import { compileMdxStable } from './mdx-compile';
 import remarkGfm from 'remark-gfm';
 import rehypeSlug from 'rehype-slug';
 import fs from 'node:fs/promises';
@@ -11,7 +11,7 @@ const Playground = dynamic(() => import('../components/Playground'));
 
 export async function loadDocByPath(filePath: string) {
   const source = await fs.readFile(filePath, 'utf8');
-  const { content } = await compileMDX({
+  const { content } = await compileMdxStable({
     source,
     options: { mdxOptions: { remarkPlugins: [remarkGfm], rehypePlugins: [rehypeSlug] } },
     components: { Callout: Callout as any, CodeTabs: CodeTabs as any, Playground: Playground as any } as any,

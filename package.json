@@ -25,19 +25,19 @@
     "./styles.css": "./dist/styles.css"
   },
   "bin": {
-    "autofusecss": "./dist/cli.cjs"
+    "autofusecss": "./dist/cli.js"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/react/index.ts src/tailwind/index.ts src/cli.ts --format esm,cjs --dts --clean && cpy src/css/styles.css dist",
+    "build": "tsup src/index.ts src/react/index.ts src/tailwind/index.ts --format esm,cjs --dts --clean && tsup src/cli.ts --format esm --clean=false && node scripts/copy-styles.mjs",
     "type-check": "echo autofusecss placeholder type-check skipped",
-    "dev": "tsup src/index.ts --format esm,cjs --watch --dts",
+    "dev": "concurrently -n lib,cli,styles \"tsup src/index.ts src/react/index.ts src/tailwind/index.ts --format esm,cjs --watch --dts\" \"tsup src/cli.ts --format esm --watch\" \"node --watch --watch-path=src/css/styles.css scripts/copy-styles.mjs\"",
     "prepublishOnly": "pnpm build",
     "docs:dev": "npm --prefix apps/docs run dev",
     "docs:build": "npm --prefix apps/docs run build",
-    "tokens:server": "ts-node-esm server/tokens-server.ts",
+    "tokens:server": "node server/tokens-server.mjs",
     "test": "vitest run"
   },
   "sideEffects": [
@@ -47,8 +47,8 @@
     "access": "public"
   },
   "peerDependencies": {
-    "react": ">=18",
-    "react-dom": ">=18"
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
   },
   "dependencies": {
     "@types/chroma-js": "^3.1.1",
@@ -61,9 +61,12 @@
   "devDependencies": {
     "@types/node": "^24.4.0",
     "@types/react": "^19.1.13",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
     "@types/ws": "^8.5.10",
     "cpy-cli": "^6.0.0",
     "express": "^4.19.2",
+    "concurrently": "^9.0.1",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
@@ -80,4 +83,5 @@
     "fluid",
     "clamp"
   ]
+  
 }

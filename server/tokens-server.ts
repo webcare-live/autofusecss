@@ -1,5 +1,11 @@
 import express from 'express';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+} from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 
@@ -57,8 +63,11 @@ app.patch('/api/tokens', (req, res) => {
 });
 // List rooms
 app.get('/api/rooms', (_req, res) => {
-  const fs = require('node:fs');
-  const roomsList = fs.existsSync(storeDir) ? fs.readdirSync(storeDir).filter((n: string) => fs.existsSync(path.join(storeDir, n, 'tokens.json'))) : [];
+  const roomsList = existsSync(storeDir)
+    ? readdirSync(storeDir).filter((n: string) =>
+        existsSync(path.join(storeDir, n, 'tokens.json'))
+      )
+    : [];
   res.json({ rooms: roomsList });
 });
 // Client counts per room
@@ -86,7 +95,7 @@ function broadcast(room: string, payload: any, skip?: WebSocket) {
   const clients = rooms.get(room);
   if (!clients) return;
   for (const c of clients) {
-    if (c === skip || c.readyState !== c.OPEN) continue;
+    if (c === skip || c.readyState !== WebSocket.OPEN) continue;
     try { c.send(JSON.stringify(payload)); } catch {}
   }
 }

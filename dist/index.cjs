@@ -32,7 +32,8 @@ __export(index_exports, {
   AutofuseProvider: () => AutofuseProvider,
   buildCssVariables: () => buildCssVariables,
   defaultTokens: () => defaultTokens,
-  defineConfig: () => defineConfig
+  defineConfig: () => defineConfig,
+  modernTokens: () => modernTokens
 });
 module.exports = __toCommonJS(index_exports);
 
@@ -72,6 +73,51 @@ function clamp(min, minVwPx, maxVwPx, vwMin, vwMax) {
 }
 function buildCssVariables(tokens) {
   const { typography, spacing, colors, modes, radius, shadows, breakpoints } = tokens;
+  const canonicalShades = [
+    "50",
+    "100",
+    "200",
+    "300",
+    "400",
+    "500",
+    "600",
+    "700",
+    "800",
+    "900"
+  ];
+  const nearestShade = (target, present) => {
+    const toNum = (s) => Number(s);
+    const t = toNum(target);
+    let best = present[0];
+    let bestDist = Math.abs(toNum(best) - t);
+    for (const p of present) {
+      const d = Math.abs(toNum(p) - t);
+      if (d < bestDist) {
+        best = p;
+        bestDist = d;
+      }
+    }
+    return best;
+  };
+  const completeScale = (scale) => {
+    const present = Object.keys(scale || {});
+    const out = { ...scale };
+    for (const s of canonicalShades) {
+      if (!(s in out) && present.length) {
+        const pick = nearestShade(s, present);
+        out[s] = out[pick];
+      }
+    }
+    return out;
+  };
+  const completePalette = (pal) => {
+    const out = {};
+    Object.entries(pal).forEach(([name, scale]) => {
+      if (!scale) return;
+      out[name] = completeScale(scale);
+    });
+    return out;
+  };
   const sizes = {};
   const names = ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl"];
   let current = typography.baseRem;
@@ -88,8 +134,9 @@ function buildCssVariables(tokens) {
     const maxPx = Math.round(basePx * 1.5);
     space[i] = clamp(basePx / 16, basePx, maxPx, breakpoints.xs, breakpoints.lg);
   }
+  const baseComplete = completePalette(colors);
   const colorVars = [];
-  Object.entries(colors).forEach(([name, scale]) => {
+  Object.entries(baseComplete).forEach(([name, scale]) => {
     Object.entries(scale).forEach(([k, v]) => {
       colorVars.push(`--af-color-${name}-${k}: ${v};`);
     });
@@ -99,32 +146,90 @@ function buildCssVariables(tokens) {
   const darkColorVars = [];
   const hcColorVars = [];
   if (modes?.dark) {
-    Object.entries(modes.dark).forEach(([name, scale]) => {
+    const darkComplete = completePalette(modes.dark);
+    Object.entries(darkComplete).forEach(([name, scale]) => {
       Object.entries(scale).forEach(([k, v]) => {
         darkColorVars.push(`--af-color-${name}-${k}: ${v};`);
       });
     });
   }
   if (modes?.highContrast) {
-    Object.entries(modes.highContrast).forEach(([name, scale]) => {
+    const hcComplete = completePalette(modes.highContrast);
+    Object.entries(hcComplete).forEach(([name, scale]) => {
       Object.entries(scale).forEach(([k, v]) => {
         hcColorVars.push(`--af-color-${name}-${k}: ${v};`);
       });
     });
   }
+  const baseUiVars = [
+    `--af-text: ${colors.neutral?.[900] || "#0f172a"}`,
+    `--af-bg-page: ${colors.neutral?.[50] || "#f8fafc"}`,
+    `--af-surface: #ffffff`,
+    `--af-surface-soft: rgba(255,255,255,0.8)`,
+    `--af-border: ${colors.neutral?.[300] || "#e5e7eb"}`
+  ];
+  const darkUiVars = [];
+  if (modes?.dark) {
+    const dn = modes.dark.neutral || {};
+    darkUiVars.push(
+      `--af-text: ${dn["900"] || "#f9fafb"}`,
+      `--af-bg-page: ${dn["50"] || "#0b1220"}`,
+      `--af-surface: ${dn["100"] || "#111827"}`,
+      `--af-surface-soft: rgba(15,23,42,0.85)`,
+      `--af-border: rgba(148,163,184,0.25)`
+    );
+  }
   return {
     sizes,
     space,
-    css: `:root{${[...colorVars, ...radiusVars, ...shadowVars].join("")}}
+    css: `:root{${[...colorVars, ...radiusVars, ...shadowVars, ...baseUiVars].join("")}}
 :root{${Object.entries(sizes).map(([k, v]) => `--af-text-${k}:${v};`).join("")}}
-:root{${Object.entries(space).map(([k, v]) => `--af-space-${k}:${v};`).join("")}}` + (darkColorVars.length ? `
-[data-theme="dark"]{${darkColorVars.join("")}}` : "") + (hcColorVars.length ? `
+:root{${Object.entries(space).map(([k, v]) => `--af-space-${k}:${v};`).join("")}}` + (darkColorVars.length || darkUiVars.length ? `
+[data-theme="dark"]{${[...darkColorVars, ...darkUiVars].join("")}}` : "") + (hcColorVars.length ? `
 [data-theme="hc"]{${hcColorVars.join("")}}` : "")
   };
 }
 function defineConfig(config) {
   return config;
 }
+
+// src/presets.ts
+var modernTokens = {
+  ...defaultTokens,
+  colors: {
+    ...defaultTokens.colors,
+    primary: {
+      50: "#eef2ff",
+      100: "#e0e7ff",
+      300: "#a5b4fc",
+      500: "#6366f1",
+      // indigo 500 vibe
+      700: "#4f46e5",
+      900: "#312e81"
+    },
+    neutral: {
+      50: "#f8fafc",
+      100: "#f1f5f9",
+      300: "#d1d5db",
+      500: "#6b7280",
+      700: "#374151",
+      900: "#0f172a"
+    },
+    success: { 500: "#10b981" },
+    warning: { 500: "#f59e0b" },
+    danger: { 500: "#ef4444" }
+  },
+  // Slightly smaller base and scale to avoid oversized previews
+  typography: { ...defaultTokens.typography, baseRem: 0.98, scale: 1.18, maxViewport: 1440 },
+  spacing: { ...defaultTokens.spacing, steps: 24 },
+  radius: { ...defaultTokens.radius, md: "0.5rem", lg: "0.75rem", xl: "1rem" },
+  shadows: {
+    sm: "0 1px 2px rgba(0,0,0,0.05)",
+    md: "0 6px 16px rgba(0,0,0,0.08)",
+    lg: "0 12px 24px rgba(0,0,0,0.10)",
+    xl: "0 20px 35px rgba(0,0,0,0.12)"
+  }
+};
 
 // src/react/Provider.tsx
 var import_react2 = require("react");
@@ -179,5 +284,6 @@ ${vars.css}${extraVars}`;
   AutofuseProvider,
   buildCssVariables,
   defaultTokens,
-  defineConfig
+  defineConfig,
+  modernTokens
 });

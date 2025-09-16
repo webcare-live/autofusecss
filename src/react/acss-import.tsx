@@ -100,7 +100,7 @@ export function AcssImportWizard({
   };
 
   const patch = buildPatch();
-  const merged = merge(current, patch as any) as AutofuseTokens;
+  const merged = merge(current, patch as Partial<AutofuseTokens>) as AutofuseTokens;
   const changes = diffCount(current, merged);
   const colorKeys = Object.keys((patch as any).colors || json?.colors || {});
   function deltaLch(a?: string, b?: string) {

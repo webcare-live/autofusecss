@@ -24,7 +24,7 @@ Docs Site
 
 Servers
 - [x] Standalone tokens server (Express + ws)
-- [ ] Live subscribe in Studio (WebSocket)
+- [x] Live subscribe in Studio (WebSocket)
   - [x] Implement WS receive; optional standalone server
 
 Next Up

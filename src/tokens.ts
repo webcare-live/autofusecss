@@ -86,6 +86,45 @@ export function clamp(min: number, minVwPx: number, maxVwPx: number, vwMin: numb
 
 export function buildCssVariables(tokens: AutofuseTokens) {
   const { typography, spacing, colors, modes, radius, shadows, breakpoints } = tokens;
+  // Ensure commonly used shade keys exist (e.g., 200/400/600/800),
+  // falling back to the nearest provided neighbor to avoid low-contrast leaks
+  // when a mode (e.g., dark) doesn't define a specific shade used in CSS.
+  const canonicalShades = [
+    '50','100','200','300','400','500','600','700','800','900'
+  ] as const;
+
+  const nearestShade = (target: string, present: string[]) => {
+    const toNum = (s: string) => Number(s);
+    const t = toNum(target);
+    let best = present[0];
+    let bestDist = Math.abs(toNum(best) - t);
+    for (const p of present) {
+      const d = Math.abs(toNum(p) - t);
+      if (d < bestDist) { best = p; bestDist = d; }
+    }
+    return best;
+  };
+
+  const completeScale = (scale: Record<string, string>): Record<string, string> => {
+    const present = Object.keys(scale || {});
+    const out: Record<string, string> = { ...scale };
+    for (const s of canonicalShades) {
+      if (!(s in out) && present.length) {
+        const pick = nearestShade(s, present);
+        out[s] = out[pick];
+      }
+    }
+    return out;
+  };
+
+  const completePalette = (pal: SemanticPalette) => {
+    const out: Record<string, ColorScale> = {};
+    Object.entries(pal).forEach(([name, scale]) => {
+      if (!scale) return;
+      out[name] = completeScale(scale as any);
+    });
+    return out as unknown as SemanticPalette;
+  };
 
   // Typography scale
   const sizes: Record<string, string> = {};
@@ -108,8 +147,9 @@ export function buildCssVariables(tokens: AutofuseTokens) {
   }
 
   // Colors (semantic variables)
+  const baseComplete = completePalette(colors);
   const colorVars: string[] = [];
-  Object.entries(colors).forEach(([name, scale]) => {
+  Object.entries(baseComplete).forEach(([name, scale]) => {
     Object.entries(scale).forEach(([k, v]) => {
       colorVars.push(`--af-color-${name}-${k}: ${v};`);
     });
@@ -123,27 +163,49 @@ export function buildCssVariables(tokens: AutofuseTokens) {
   const darkColorVars: string[] = [];
   const hcColorVars: string[] = [];
   if (modes?.dark) {
-    Object.entries(modes.dark).forEach(([name, scale]) => {
+    const darkComplete = completePalette(modes.dark);
+    Object.entries(darkComplete).forEach(([name, scale]) => {
       Object.entries(scale).forEach(([k, v]) => {
         darkColorVars.push(`--af-color-${name}-${k}: ${v};`);
       });
     });
   }
   if (modes?.highContrast) {
-    Object.entries(modes.highContrast).forEach(([name, scale]) => {
+    const hcComplete = completePalette(modes.highContrast);
+    Object.entries(hcComplete).forEach(([name, scale]) => {
       Object.entries(scale).forEach(([k, v]) => {
         hcColorVars.push(`--af-color-${name}-${k}: ${v};`);
       });
     });
   }
 
+  // Base surfaces/text derived from semantic palette
+  const baseUiVars = [
+    `--af-text: ${colors.neutral?.[900] || '#0f172a'}`,
+    `--af-bg-page: ${colors.neutral?.[50] || '#f8fafc'}`,
+    `--af-surface: #ffffff`,
+    `--af-surface-soft: rgba(255,255,255,0.8)`,
+    `--af-border: ${colors.neutral?.[300] || '#e5e7eb'}`,
+  ];
+  const darkUiVars: string[] = [];
+  if (modes?.dark) {
+    const dn = modes.dark.neutral || {} as Record<string,string>;
+    darkUiVars.push(
+      `--af-text: ${dn["900"] || '#f9fafb'}`,
+      `--af-bg-page: ${dn["50"] || '#0b1220'}`,
+      `--af-surface: ${dn["100"] || '#111827'}`,
+      `--af-surface-soft: rgba(15,23,42,0.85)`,
+      `--af-border: rgba(148,163,184,0.25)`
+    );
+  }
+
   return {
     sizes, space,
     css:
-      `:root{${[...colorVars, ...radiusVars, ...shadowVars].join('')}}` +
+      `:root{${[...colorVars, ...radiusVars, ...shadowVars, ...baseUiVars].join('')}}` +
       `\n:root{${Object.entries(sizes).map(([k,v])=>`--af-text-${k}:${v};`).join('')}}` +
       `\n:root{${Object.entries(space).map(([k,v])=>`--af-space-${k}:${v};`).join('')}}` +
-      (darkColorVars.length ? `\n[data-theme="dark"]{${darkColorVars.join('')}}` : '') +
+      (darkColorVars.length || darkUiVars.length ? `\n[data-theme="dark"]{${[...darkColorVars, ...darkUiVars].join('')}}` : '') +
       (hcColorVars.length ? `\n[data-theme="hc"]{${hcColorVars.join('')}}` : '')
   };
 }

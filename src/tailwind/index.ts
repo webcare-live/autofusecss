@@ -3,6 +3,7 @@ import { defaultTokens, AutofuseTokens, buildCssVariables } from "../tokens.js";
 
 export interface AutofuseTailwindOptions {
   tokens?: Partial<AutofuseTokens>;
+  layer?: 'base' | 'components' | 'utilities';
 }
 
 export default function autofusePlugin(
@@ -14,7 +15,9 @@ export default function autofusePlugin(
   } as AutofuseTokens;
 
   return plugin(
-    function ({ addBase, addUtilities, addVariant }) {
+    function ({ addBase, addUtilities: twAddUtilities, addVariant }) {
+      const layer = (_opts.layer || 'utilities') as 'base' | 'components' | 'utilities';
+      const addUtilities = (obj: Record<string, any>) => twAddUtilities(obj, { layer } as any);
       // Base CSS variables using token values (colors + sizes + spacing)
       const rootColorVars: Record<string, string> = {};
       Object.entries(tokens.colors).forEach(([name, scale]) => {
@@ -41,6 +44,34 @@ export default function autofusePlugin(
       addVariant("theme-dark", "[data-theme=dark] &");
       addVariant("density-compact", "[data-density=compact] &");
       addVariant("theme-hc", "[data-theme=hc] &");
+
+      // Reduced motion variants
+      addVariant('motion-safe', '@media (prefers-reduced-motion: no-preference) &');
+      addVariant('motion-reduce', '@media (prefers-reduced-motion: reduce) &');
+
+      // Container query variants (width breakpoints)
+      addVariant('cq-xs', '@container (min-width: 20rem) &');
+      addVariant('cq-sm', '@container (min-width: 30rem) &');
+      addVariant('cq-md', '@container (min-width: 48rem) &');
+      addVariant('cq-lg', '@container (min-width: 64rem) &');
+      addVariant('cq-xl', '@container (min-width: 80rem) &');
+
+      // Named container query variants
+      addVariant('cq-content-xs', '@container content (min-width: 20rem) &');
+      addVariant('cq-content-sm', '@container content (min-width: 30rem) &');
+      addVariant('cq-content-md', '@container content (min-width: 48rem) &');
+      addVariant('cq-content-lg', '@container content (min-width: 64rem) &');
+      addVariant('cq-content-xl', '@container content (min-width: 80rem) &');
+      addVariant('cq-layout-xs', '@container layout (min-width: 20rem) &');
+      addVariant('cq-layout-sm', '@container layout (min-width: 30rem) &');
+      addVariant('cq-layout-md', '@container layout (min-width: 48rem) &');
+      addVariant('cq-layout-lg', '@container layout (min-width: 64rem) &');
+      addVariant('cq-layout-xl', '@container layout (min-width: 80rem) &');
+
+      // Contrast and high-contrast system variants
+      addVariant('contrast-more', '@media (prefers-contrast: more) &');
+      addVariant('contrast-less', '@media (prefers-contrast: less) &');
+      addVariant('forced-colors', '@media (forced-colors: active) &');
 
       // Utilities: spacing (m/p + axis/sides)
       const spacingUtils: Record<string, any> = {};
@@ -656,7 +687,16 @@ export default function autofusePlugin(
         ".af-rounded-xl": { borderRadius: "var(--af-radius-xl)" },
         ".af-rounded-full": { borderRadius: "var(--af-radius-full)" },
       };
-      addUtilities(rounded);
+      // Aliases to match docs/examples using `af-radius-*`
+      const radiusAliases: Record<string, any> = {
+        ".af-radius-none": { borderRadius: "var(--af-radius-none)" },
+        ".af-radius-sm": { borderRadius: "var(--af-radius-sm)" },
+        ".af-radius-md": { borderRadius: "var(--af-radius-md)" },
+        ".af-radius-lg": { borderRadius: "var(--af-radius-lg)" },
+        ".af-radius-xl": { borderRadius: "var(--af-radius-xl)" },
+        ".af-radius-full": { borderRadius: "var(--af-radius-full)" },
+      };
+      addUtilities({ ...rounded, ...radiusAliases });
 
       const shadows: Record<string, any> = {
         ".af-shadow-sm": { boxShadow: "var(--af-shadow-sm)" },
@@ -996,6 +1036,63 @@ export default function autofusePlugin(
         textUtils[`.af-text-${n}`] = { fontSize: `var(--af-text-${n})` };
       }
       addUtilities(textUtils);
+
+      // Utilities: font families and weights
+      addUtilities({
+        ".af-font-sans": {
+          fontFamily:
+            "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, Arial, \"Apple Color Emoji\", \"Segoe UI Emoji\"",
+        },
+        ".af-font-serif": {
+          fontFamily:
+            "ui-serif, Georgia, Cambria, \"Times New Roman\", Times, serif",
+        },
+        ".af-font-mono": {
+          fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace",
+        },
+        ".af-font-thin": { fontWeight: "100" },
+        ".af-font-extralight": { fontWeight: "200" },
+        ".af-font-light": { fontWeight: "300" },
+        ".af-font-normal": { fontWeight: "400" },
+        ".af-font-medium": { fontWeight: "500" },
+        ".af-font-semibold": { fontWeight: "600" },
+        ".af-font-bold": { fontWeight: "700" },
+        ".af-font-extrabold": { fontWeight: "800" },
+        ".af-font-black": { fontWeight: "900" },
+      });
+
+      // Utilities: line-height (leading)
+      addUtilities({
+        ".af-leading-none": { lineHeight: "1" },
+        ".af-leading-tight": { lineHeight: "1.25" },
+        ".af-leading-snug": { lineHeight: "1.375" },
+        ".af-leading-normal": { lineHeight: "1.5" },
+        ".af-leading-relaxed": { lineHeight: "1.625" },
+        ".af-leading-loose": { lineHeight: "2" },
+      });
+
+      // Utilities: black/white helpers
+      addUtilities({
+        ".af-text-white": { color: "#ffffff" },
+        ".af-text-black": { color: "#000000" },
+        ".af-bg-white": { backgroundColor: "#ffffff" },
+        ".af-bg-black": { backgroundColor: "#000000" },
+      });
+
+      // Utilities: numeric width/height based on spacing scale
+      const whUtils: Record<string, any> = {};
+      for (let i = 0; i <= tokens.spacing.steps; i++) {
+        const v = `var(--af-space-${i})`;
+        whUtils[`.af-w-${i}`] = { width: v };
+        whUtils[`.af-h-${i}`] = { height: v };
+        whUtils[`.af-size-${i}`] = { width: v, height: v };
+        whUtils[`.af-min-w-${i}`] = { minWidth: v };
+        whUtils[`.af-min-h-${i}`] = { minHeight: v };
+        whUtils[`.af-max-w-${i}`] = { maxWidth: v };
+        whUtils[`.af-max-h-${i}`] = { maxHeight: v };
+      }
+      addUtilities(whUtils);
 
       // Utilities: semantic color helpers
       const colorUtils: Record<string, any> = {};
@@ -1463,6 +1560,46 @@ export default function autofusePlugin(
             zIndex: "2",
           },
         },
+      });
+
+      // Logical properties (inline/block/start/end) and container query helpers
+      const logicalUtils: Record<string, any> = {};
+      for (let i = 0; i <= tokens.spacing.steps; i++) {
+        const v = `var(--af-space-${i})`;
+        logicalUtils[`.af-m-inline-${i}`] = { marginInline: v };
+        logicalUtils[`.af-m-block-${i}`] = { marginBlock: v };
+        logicalUtils[`.af-p-inline-${i}`] = { paddingInline: v };
+        logicalUtils[`.af-p-block-${i}`] = { paddingBlock: v };
+        logicalUtils[`.af-ms-${i}`] = { marginInlineStart: v };
+        logicalUtils[`.af-me-${i}`] = { marginInlineEnd: v };
+        logicalUtils[`.af-ps-${i}`] = { paddingInlineStart: v };
+        logicalUtils[`.af-pe-${i}`] = { paddingInlineEnd: v };
+        if (i > 0) {
+          const nv = `calc(${v} * -1)`;
+          logicalUtils[`.\\-af-ms-${i}`] = { marginInlineStart: nv };
+          logicalUtils[`.\\-af-me-${i}`] = { marginInlineEnd: nv };
+          logicalUtils[`.\\-af-m-inline-${i}`] = { marginInline: nv };
+        }
+      }
+      // Container query enablement
+      logicalUtils[`.af-cq`] = { containerType: 'inline-size' };
+      logicalUtils[`.af-cq-content`] = { containerType: 'inline-size', containerName: 'content' };
+      logicalUtils[`.af-cq-layout`] = { containerType: 'inline-size', containerName: 'layout' };
+      addUtilities(logicalUtils);
+
+      // Motion helpers (animations/transitions)
+      addBase({
+        '@keyframes af-spin': { to: { transform: 'rotate(360deg)' } },
+        '@keyframes af-pulse': {
+          '50%': { opacity: '0.5' },
+        },
+      });
+      addUtilities({
+        '.af-animate-none': { animation: 'none' },
+        '.af-animate-spin': { animation: 'af-spin 1s linear infinite' },
+        '.af-animate-pulse': { animation: 'af-pulse 2s ease-in-out infinite' },
+        '.af-transition-none': { transitionProperty: 'none' },
+        '.af-transition-base': { transition: 'all 150ms ease-out' },
       });
     },
     {

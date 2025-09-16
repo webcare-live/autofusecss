@@ -8,7 +8,7 @@ Transport
 
 Endpoints
 - GET /api/tokens?room=default → returns current tokens (AutofuseTokens)
-- PUT /api/tokens?room=default → replaces tokens; body: { tokens: Partial<AutofuseTokens> }
+- PUT /api/tokens?room=default → replaces tokens; body: `{ tokens: Partial<AutofuseTokens> }`
 - PATCH /api/tokens?room=default → deep‑merges partial tokens
 - GET /api/rooms → list known rooms
 - GET /api/tokens/history?room=default → recent token revisions

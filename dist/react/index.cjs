@@ -1,3 +1,4 @@
+"use client";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -76,6 +77,51 @@ function clamp(min, minVwPx, maxVwPx, vwMin, vwMax) {
 }
 function buildCssVariables(tokens) {
   const { typography, spacing, colors, modes, radius, shadows, breakpoints } = tokens;
+  const canonicalShades = [
+    "50",
+    "100",
+    "200",
+    "300",
+    "400",
+    "500",
+    "600",
+    "700",
+    "800",
+    "900"
+  ];
+  const nearestShade = (target, present) => {
+    const toNum = (s) => Number(s);
+    const t = toNum(target);
+    let best = present[0];
+    let bestDist = Math.abs(toNum(best) - t);
+    for (const p of present) {
+      const d = Math.abs(toNum(p) - t);
+      if (d < bestDist) {
+        best = p;
+        bestDist = d;
+      }
+    }
+    return best;
+  };
+  const completeScale = (scale) => {
+    const present = Object.keys(scale || {});
+    const out = { ...scale };
+    for (const s of canonicalShades) {
+      if (!(s in out) && present.length) {
+        const pick = nearestShade(s, present);
+        out[s] = out[pick];
+      }
+    }
+    return out;
+  };
+  const completePalette = (pal) => {
+    const out = {};
+    Object.entries(pal).forEach(([name, scale]) => {
+      if (!scale) return;
+      out[name] = completeScale(scale);
+    });
+    return out;
+  };
   const sizes = {};
   const names = ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl"];
   let current = typography.baseRem;
@@ -92,8 +138,9 @@ function buildCssVariables(tokens) {
     const maxPx = Math.round(basePx * 1.5);
     space[i] = clamp(basePx / 16, basePx, maxPx, breakpoints.xs, breakpoints.lg);
   }
+  const baseComplete = completePalette(colors);
   const colorVars = [];
-  Object.entries(colors).forEach(([name, scale]) => {
+  Object.entries(baseComplete).forEach(([name, scale]) => {
     Object.entries(scale).forEach(([k, v]) => {
       colorVars.push(`--af-color-${name}-${k}: ${v};`);
     });
@@ -103,26 +150,46 @@ function buildCssVariables(tokens) {
   const darkColorVars = [];
   const hcColorVars = [];
   if (modes?.dark) {
-    Object.entries(modes.dark).forEach(([name, scale]) => {
+    const darkComplete = completePalette(modes.dark);
+    Object.entries(darkComplete).forEach(([name, scale]) => {
       Object.entries(scale).forEach(([k, v]) => {
         darkColorVars.push(`--af-color-${name}-${k}: ${v};`);
       });
     });
   }
   if (modes?.highContrast) {
-    Object.entries(modes.highContrast).forEach(([name, scale]) => {
+    const hcComplete = completePalette(modes.highContrast);
+    Object.entries(hcComplete).forEach(([name, scale]) => {
       Object.entries(scale).forEach(([k, v]) => {
         hcColorVars.push(`--af-color-${name}-${k}: ${v};`);
       });
     });
   }
+  const baseUiVars = [
+    `--af-text: ${colors.neutral?.[900] || "#0f172a"}`,
+    `--af-bg-page: ${colors.neutral?.[50] || "#f8fafc"}`,
+    `--af-surface: #ffffff`,
+    `--af-surface-soft: rgba(255,255,255,0.8)`,
+    `--af-border: ${colors.neutral?.[300] || "#e5e7eb"}`
+  ];
+  const darkUiVars = [];
+  if (modes?.dark) {
+    const dn = modes.dark.neutral || {};
+    darkUiVars.push(
+      `--af-text: ${dn["900"] || "#f9fafb"}`,
+      `--af-bg-page: ${dn["50"] || "#0b1220"}`,
+      `--af-surface: ${dn["100"] || "#111827"}`,
+      `--af-surface-soft: rgba(15,23,42,0.85)`,
+      `--af-border: rgba(148,163,184,0.25)`
+    );
+  }
   return {
     sizes,
     space,
-    css: `:root{${[...colorVars, ...radiusVars, ...shadowVars].join("")}}
+    css: `:root{${[...colorVars, ...radiusVars, ...shadowVars, ...baseUiVars].join("")}}
 :root{${Object.entries(sizes).map(([k, v]) => `--af-text-${k}:${v};`).join("")}}
-:root{${Object.entries(space).map(([k, v]) => `--af-space-${k}:${v};`).join("")}}` + (darkColorVars.length ? `
-[data-theme="dark"]{${darkColorVars.join("")}}` : "") + (hcColorVars.length ? `
+:root{${Object.entries(space).map(([k, v]) => `--af-space-${k}:${v};`).join("")}}` + (darkColorVars.length || darkUiVars.length ? `
+[data-theme="dark"]{${[...darkColorVars, ...darkUiVars].join("")}}` : "") + (hcColorVars.length ? `
 [data-theme="hc"]{${hcColorVars.join("")}}` : "")
   };
 }
@@ -483,37 +550,205 @@ function AcssImportWizard({
 
 // src/react/theme-studio.tsx
 var import_jsx_runtime3 = require("react/jsx-runtime");
-function Row({
-  label,
-  children
-}) {
-  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-    "div",
-    {
-      style: {
-        display: "grid",
-        gridTemplateColumns: "1fr 2fr",
-        gap: "var(--af-space-4)",
-        alignItems: "center",
-        margin: "var(--af-space-2) 0"
-      },
-      children: [
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-          "div",
-          {
-            style: {
-              fontSize: "var(--af-text-sm)",
-              color: "var(--af-color-neutral-500)"
-            },
-            children: label
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { children })
-      ]
-    }
-  );
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(full, 16);
+  return [n >> 16 & 255, n >> 8 & 255, n & 255];
 }
+function hexToHsl(hex) {
+  const [r0, g0, b0] = hexToRgb(hex).map((v) => v / 255);
+  const max = Math.max(r0, g0, b0), min = Math.min(r0, g0, b0);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r0:
+        h = (g0 - b0) / d + (g0 < b0 ? 6 : 0);
+        break;
+      case g0:
+        h = (b0 - r0) / d + 2;
+        break;
+      case b0:
+        h = (r0 - g0) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+  return [h * 360, s, l];
+}
+function hslToHex(h, s, l) {
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const c = l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
+    return Math.round(255 * c).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+function Row({ label, children }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-grid-12 af-gap-3 af-items-center mt-2 mb-2", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-col-span-4 text-sm text-muted-foreground", children: label }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-col-span-8 min-w-0", children })
+  ] });
+}
+var CONTROL_CLASS = "h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background transition";
+var SELECT_CLASS = `${CONTROL_CLASS} appearance-none`;
+var SMALL_CONTROL_CLASS = "h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background transition";
+var BUTTON_PRIMARY_CLASS = "af-btn-modern af-btn-primary h-9 px-4 focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background transition";
+var BUTTON_OUTLINE_CLASS = "af-btn-modern af-btn-outline h-9 px-4 focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background transition";
+var BUTTON_GHOST_CLASS = "af-btn-modern af-btn-outline h-9 px-3 focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background transition";
 var SHADE_KEYS = ["50", "100", "300", "500", "700", "900"];
+function clampHex(v) {
+  const x = v.trim().replace(/^#?/, "").toUpperCase();
+  if (x.length === 3 || x.length === 6) return `#${x}`;
+  if (x.length > 6) return `#${x.slice(0, 6)}`;
+  return `#${x.padEnd(6, "0")}`;
+}
+function ColorCell({ value, onChange }) {
+  const [open, setOpen] = import_react4.default.useState(false);
+  const ref = import_react4.default.useRef(null);
+  const [hex, setHex] = import_react4.default.useState(value);
+  import_react4.default.useEffect(() => setHex(value), [value]);
+  import_react4.default.useEffect(() => {
+    const onDoc = (e) => {
+      if (!ref.current?.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
+  import_react4.default.useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+  const sysRef = import_react4.default.useRef(null);
+  const adjust = (deltaL) => {
+    try {
+      const c = (0, import_chroma_js2.default)(hex);
+      const [l, a, b] = c.lab();
+      const nl = Math.max(0, Math.min(100, l + deltaL));
+      const out = import_chroma_js2.default.lab(nl, a, b).hex();
+      setHex(out);
+      onChange(out);
+    } catch {
+    }
+  };
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { position: "relative" }, ref, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "af-color-picker", "aria-label": "Pick color", onClick: () => setOpen((s) => !s), style: { background: value } }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("input", { ref: sysRef, type: "color", value, onChange: (e) => onChange(e.target.value), style: { position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }, "aria-hidden": true }),
+    open && /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "fixed inset-0 z-overlay bg-overlay backdrop-blur-sm", "aria-hidden": true, onClick: () => setOpen(false) }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+        "div",
+        {
+          className: "af-popover z-popover",
+          role: "dialog",
+          "aria-label": "Color picker",
+          "aria-modal": "true",
+          style: { top: "2.75rem", left: 0 },
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-popover-row", style: { marginBottom: "0.25rem" }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "af-popover-title", children: "Color" }),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "af-color-swatch", style: { background: hex } })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-popover-row", style: { marginBottom: "0.25rem" }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+                "input",
+                {
+                  className: `${SMALL_CONTROL_CLASS} af-input-hex`,
+                  value: hex,
+                  onChange: (e) => {
+                    const v = clampHex(e.target.value);
+                    setHex(v);
+                    onChange(v);
+                  }
+                }
+              ),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+                "button",
+                {
+                  type: "button",
+                  className: BUTTON_GHOST_CLASS,
+                  onClick: () => {
+                    try {
+                      sysRef.current?.click();
+                    } catch {
+                    }
+                  },
+                  children: "System\u2026"
+                }
+              )
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-popover-row", style: { gap: "0.75rem", marginBottom: "0.25rem" }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("label", { className: "af-text-sm", style: { width: "1.25rem" }, children: "H" }),
+              (() => {
+                let [h, s, l] = hexToHsl(hex);
+                return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+                  "input",
+                  {
+                    className: "af-flex-1",
+                    type: "range",
+                    min: 0,
+                    max: 360,
+                    step: 1,
+                    value: h,
+                    onChange: (e) => {
+                      const nh = Number(e.target.value);
+                      const v = hslToHex(nh, s, l);
+                      setHex(v);
+                      onChange(v);
+                    }
+                  }
+                );
+              })()
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-popover-row", style: { gap: "0.75rem", marginBottom: "0.25rem" }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("label", { className: "af-text-sm", style: { width: "1.25rem" }, children: "S" }),
+              (() => {
+                let [h, s, l] = hexToHsl(hex);
+                return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+                  "input",
+                  {
+                    className: "af-flex-1",
+                    type: "range",
+                    min: 0,
+                    max: 1,
+                    step: 0.01,
+                    value: s,
+                    onChange: (e) => {
+                      const ns = Number(e.target.value);
+                      const v = hslToHex(h, ns, l);
+                      setHex(v);
+                      onChange(v);
+                    }
+                  }
+                );
+              })()
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-color-actions", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: BUTTON_GHOST_CLASS, onClick: () => adjust(-10), children: "-10L" }),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: BUTTON_GHOST_CLASS, onClick: () => adjust(-5), children: "-5L" }),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: BUTTON_GHOST_CLASS, onClick: () => adjust(5), children: "+5L" }),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: BUTTON_GHOST_CLASS, onClick: () => adjust(10), children: "+10L" })
+            ] })
+          ]
+        }
+      )
+    ] })
+  ] });
+}
 function ThemeStudio() {
   const { tokens, setTokens, theme, setTheme, density, setDensity } = useAutofuse();
   const scale = tokens.typography.scale;
@@ -544,6 +779,11 @@ function ThemeStudio() {
   };
   const setRadius = (k, v) => applyPatch({ radius: { ...tokens.radius, [k]: v } });
   const setShadow = (k, v) => applyPatch({ shadows: { ...tokens.shadows, [k]: v } });
+  const [copied, setCopied] = import_react4.default.useState(false);
+  const [exported, setExported] = import_react4.default.useState(false);
+  const [saving, setSaving] = import_react4.default.useState(false);
+  const [savedOk, setSavedOk] = import_react4.default.useState(false);
+  const [loadingTokens, setLoadingTokens] = import_react4.default.useState(false);
   const exportConfig = () => {
     const content = `// autofusecss config generated from ThemeStudio
 import { defineConfig } from 'autofusecss';
@@ -561,6 +801,12 @@ export default defineConfig(${JSON.stringify(
       a.download = "autofusecss.config.mjs";
       a.click();
       URL.revokeObjectURL(a.href);
+      setExported(true);
+      setTimeout(() => setExported(false), 1200);
+      try {
+        window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "ok", msg: "Config exported" } }));
+      } catch {
+      }
     }
   };
   const copyTailwindConfig = async () => {
@@ -576,8 +822,17 @@ module.exports = {
 `;
     try {
       await navigator.clipboard.writeText(cfg);
-      alert("Tailwind config copied");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+      try {
+        window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "ok", msg: "Tailwind config copied" } }));
+      } catch {
+      }
     } catch {
+      try {
+        window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "err", msg: "Copy failed" } }));
+      } catch {
+      }
     }
   };
   const [presetName, setPresetName] = import_react4.default.useState("default");
@@ -594,8 +849,15 @@ module.exports = {
       const p = getPresets();
       p[presetName || "preset"] = tokens;
       localStorage.setItem("af-presets", JSON.stringify(p));
-      alert("Preset saved");
+      try {
+        window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "ok", msg: "Preset saved" } }));
+      } catch {
+      }
     } catch {
+      try {
+        window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "err", msg: "Save preset failed" } }));
+      } catch {
+      }
     }
   };
   const loadPreset = () => {
@@ -615,17 +877,64 @@ module.exports = {
     } catch {
     }
   };
-  const saveToServer = async () => {
+  const apiFromWs = (ws) => {
     try {
-      await fetch("/api/tokens", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tokens })
-      });
-      alert("Saved tokens to /api/tokens");
+      const u = new URL(ws);
+      const proto = u.protocol === "wss:" ? "https:" : "http:";
+      return `${proto}//${u.host}`;
+    } catch {
+      return "";
+    }
+  };
+  const saveToServer = async () => {
+    const base = apiFromWs(wsUrl);
+    const url = base ? `${base}/api/tokens?room=${encodeURIComponent(room)}` : `/api/tokens?room=${encodeURIComponent(room)}`;
+    try {
+      setSaving(true);
+      await fetch(url, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(tokens) });
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 1200);
+      try {
+        window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "ok", msg: "Tokens saved" } }));
+      } catch {
+      }
     } catch (e) {
       console.error(e);
-      alert("Save failed. Is the API running?");
+      try {
+        window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "err", msg: "Save failed" } }));
+      } catch {
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+  const loadFromServer = async (targetRoom) => {
+    const r = targetRoom || room;
+    const base = apiFromWs(wsUrl);
+    const url = base ? `${base}/api/tokens?room=${encodeURIComponent(r)}` : `/api/tokens?room=${encodeURIComponent(r)}`;
+    try {
+      setLoadingTokens(true);
+      const res = await fetch(url);
+      const data = await res.json();
+      const t = data && data.colors ? data : data?.tokens;
+      if (t) {
+        applyPatch(t);
+        try {
+          window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "ok", msg: "Tokens loaded" } }));
+        } catch {
+        }
+      } else try {
+        window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "err", msg: "No tokens stored" } }));
+      } catch {
+      }
+    } catch (e) {
+      console.error(e);
+      try {
+        window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "err", msg: "Load failed" } }));
+      } catch {
+      }
+    } finally {
+      setLoadingTokens(false);
     }
   };
   const [wsUrl, setWsUrl] = import_react4.default.useState("ws://localhost:4001");
@@ -636,6 +945,7 @@ module.exports = {
     () => typeof window !== "undefined" ? localStorage.getItem("af-token") || "" : ""
   );
   const [connected, setConnected] = import_react4.default.useState(false);
+  const [cloneRoom, setCloneRoom] = import_react4.default.useState("production");
   const connectWs = () => {
     try {
       wsRef.current?.close();
@@ -665,14 +975,14 @@ module.exports = {
       }
     };
   };
-  const hexToRgb = (hex) => {
+  const hexToRgb2 = (hex) => {
     const h = hex.replace("#", "");
     const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
     const n = parseInt(full, 16);
     return [n >> 16 & 255, n >> 8 & 255, n & 255];
   };
   const luminance = (hex) => {
-    const [r, g, b] = hexToRgb(hex).map((v) => v / 255);
+    const [r, g, b] = hexToRgb2(hex).map((v) => v / 255);
     const conv = (c) => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
     const [R, G, B] = [conv(r), conv(g), conv(b)];
     return 0.2126 * R + 0.7152 * G + 0.0722 * B;
@@ -682,37 +992,6 @@ module.exports = {
     const L2 = luminance(bg) + 0.05;
     const ratio = L1 > L2 ? L1 / L2 : L2 / L1;
     return Math.round(ratio * 100) / 100;
-  };
-  const hexToHsl = (hex) => {
-    const [r0, g0, b0] = hexToRgb(hex).map((v) => v / 255);
-    const max = Math.max(r0, g0, b0), min = Math.min(r0, g0, b0);
-    let h = 0, s = 0, l = (max + min) / 2;
-    if (max !== min) {
-      const d = max - min;
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      switch (max) {
-        case r0:
-          h = (g0 - b0) / d + (g0 < b0 ? 6 : 0);
-          break;
-        case g0:
-          h = (b0 - r0) / d + 2;
-          break;
-        case b0:
-          h = (r0 - g0) / d + 4;
-          break;
-      }
-      h /= 6;
-    }
-    return [h * 360, s, l];
-  };
-  const hslToHex = (h, s, l) => {
-    const f = (n) => {
-      const k = (n + h / 30) % 12;
-      const a = s * Math.min(l, 1 - l);
-      const c = l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
-      return Math.round(255 * c).toString(16).padStart(2, "0");
-    };
-    return `#${f(0)}${f(8)}${f(4)}`;
   };
   const generateShades = (base) => {
     const [h, s, l] = hexToHsl(base);
@@ -776,367 +1055,350 @@ module.exports = {
     return import_chroma_js2.default.lab(best, a, b).hex();
   };
   const [showReport, setShowReport] = import_react4.default.useState(false);
-  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-    "div",
-    {
-      style: {
-        display: "block",
-        padding: "var(--af-space-4)",
-        border: "1px solid var(--af-color-neutral-300)",
-        borderRadius: "var(--af-radius-md)"
-      },
-      children: [
+  const [toasts, setToasts] = import_react4.default.useState([]);
+  import_react4.default.useEffect(() => {
+    const onToast = (e) => {
+      const id = Date.now() + Math.random();
+      setToasts((q) => [...q, { id, ...e.detail || { type: "ok", msg: "" } }]);
+      setTimeout(() => setToasts((q) => q.filter((t) => t.id !== id)), 1800);
+    };
+    window.addEventListener("af:toast", onToast);
+    return () => window.removeEventListener("af:toast", onToast);
+  }, []);
+  const lastToast = toasts.length ? toasts[toasts.length - 1]?.msg : "";
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-theme-studio bg-background text-foreground border border-border shadow-lg rounded-xl", children: [
+    toasts.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-toast-container", children: toasts.map((t) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: `af-toast ${t.type === "ok" ? "af-toast-ok" : "af-toast-err"}`, children: t.msg }, t.id)) }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-sr-only", "aria-live": "polite", role: "status", children: [
+      saving ? "Saving\u2026" : savedOk ? "Saved" : "",
+      " ",
+      lastToast || ""
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-studio-header sticky top-0 z-header bg-background/80 backdrop-blur border-b border-border", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-studio-title-section", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("h3", { className: "af-studio-title", children: "Autofuse Theme Studio" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { className: "af-studio-subtitle", children: "Craft your perfect design system with real-time visual feedback" })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-studio-actions", children: [
         /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-          "div",
+          "button",
           {
-            style: {
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            },
+            type: "button",
+            onClick: exportConfig,
+            className: BUTTON_OUTLINE_CLASS,
+            "aria-label": "Export Config",
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("h3", { style: { fontSize: "var(--af-text-lg)", margin: 0 }, children: "Autofuse Theme Studio" }),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { display: "flex", gap: "var(--af-space-2)" }, children: [
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                  "button",
-                  {
-                    onClick: exportConfig,
-                    style: {
-                      padding: "0.25rem 0.5rem",
-                      border: "1px solid var(--af-color-neutral-300)",
-                      borderRadius: "var(--af-radius-sm)"
-                    },
-                    children: "Export"
-                  }
-                ),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                  "button",
-                  {
-                    onClick: saveToServer,
-                    style: {
-                      padding: "0.25rem 0.5rem",
-                      border: "1px solid var(--af-color-neutral-300)",
-                      borderRadius: "var(--af-radius-sm)"
-                    },
-                    children: "Save"
-                  }
-                ),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                  "button",
-                  {
-                    onClick: copyTailwindConfig,
-                    style: {
-                      padding: "0.25rem 0.5rem",
-                      border: "1px solid var(--af-color-neutral-300)",
-                      borderRadius: "var(--af-radius-sm)"
-                    },
-                    children: "Copy Tailwind Config"
-                  }
-                )
-              ] })
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { children: "\u{1F4BE}" }),
+              "Export Config",
+              exported && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "af-ghost-tip", "aria-hidden": true, children: "\u2713 Copied" })
             ]
           }
         ),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+          "button",
+          {
+            type: "button",
+            onClick: saveToServer,
+            className: `${BUTTON_PRIMARY_CLASS} ${saving ? "af-btn-loading" : ""}`,
+            disabled: saving,
+            "aria-pressed": saving,
+            "aria-busy": saving,
+            children: [
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { children: "\u{1F4BE}" }),
+              saving ? "Saving\u2026" : savedOk ? "Saved \u2713" : "Save"
+            ]
+          }
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+          "button",
+          {
+            type: "button",
+            onClick: copyTailwindConfig,
+            className: BUTTON_OUTLINE_CLASS,
+            "aria-label": "Copy Tailwind Config",
+            children: [
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { children: "\u{1F343}" }),
+              "Copy Tailwind Config",
+              copied && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "af-ghost-tip", "aria-hidden": true, children: "\u2713 Copied" })
+            ]
+          }
+        )
+      ] })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-studio-content", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-grid-12 af-gap-3 af-items-center", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-col-span-6", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          "input",
+          {
+            className: CONTROL_CLASS,
+            type: "text",
+            value: wsUrl,
+            onChange: (e) => setWsUrl(e.target.value),
+            placeholder: "ws://localhost:4001"
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-col-span-3", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          "input",
+          {
+            className: CONTROL_CLASS,
+            type: "text",
+            value: room,
+            onChange: (e) => setRoom(e.target.value),
+            placeholder: "room"
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-col-span-2", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          "input",
+          {
+            className: CONTROL_CLASS,
+            type: "password",
+            value: token,
+            onChange: (e) => setToken(e.target.value),
+            placeholder: "token (optional)"
+          }
+        ) }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-col-span-1", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", onClick: connectWs, className: BUTTON_OUTLINE_CLASS, children: connected ? "Connected" : "Connect" }) })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: "Theme mode", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("select", { className: SELECT_CLASS, value: theme, onChange: (e) => setTheme(e.target.value), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "light", children: "Light" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "dark", children: "Dark" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "hc", children: "High Contrast" })
+      ] }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "mt-3", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "text-sm text-muted-foreground mb-2", children: "Room actions" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-form-row af-cols-3", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "input",
+            {
+              className: CONTROL_CLASS,
+              type: "text",
+              placeholder: "clone to room",
+              value: cloneRoom,
+              onChange: (e) => setCloneRoom(e.target.value)
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "button",
+            {
+              type: "button",
+              className: `${BUTTON_OUTLINE_CLASS} ${loadingTokens ? "af-btn-loading" : ""}`,
+              disabled: loadingTokens,
+              onClick: () => loadFromServer(),
+              children: "Load"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "button",
+            {
+              type: "button",
+              className: `${BUTTON_PRIMARY_CLASS} ${saving ? "af-btn-loading" : ""}`,
+              disabled: saving,
+              onClick: saveToServer,
+              children: saving ? "Saving\u2026" : savedOk ? "Saved \u2713" : "Save"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "grid", style: { gridTemplateColumns: "1fr auto", gap: "var(--af-space-2)", marginTop: "var(--af-space-2)" }, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          "button",
+          {
+            type: "button",
+            onClick: async () => {
+              const base = apiFromWs(wsUrl);
+              const url = base ? `${base}/api/tokens?room=${encodeURIComponent(cloneRoom)}` : `/api/tokens?room=${encodeURIComponent(cloneRoom)}`;
+              try {
+                await fetch(url, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(tokens) });
+                try {
+                  window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "ok", msg: `Cloned to ${cloneRoom}` } }));
+                } catch {
+                }
+              } catch {
+                try {
+                  window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "err", msg: "Clone failed" } }));
+                } catch {
+                }
+              }
+            },
+            className: BUTTON_OUTLINE_CLASS,
+            children: "Clone to room"
+          }
+        ) })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: "Density", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("select", { className: SELECT_CLASS, value: density, onChange: (e) => setDensity(e.target.value), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "comfortable", children: "Comfortable" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "compact", children: "Compact" })
+      ] }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Palette" }),
+        ["primary", "neutral"].map((role) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-palette-grid", style: { marginBottom: "var(--af-space-2)" }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-text-sm af-text-muted", children: role }),
+          SHADE_KEYS.map((s) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            ColorCell,
+            {
+              value: tokens.colors[role]?.[s] || "#ffffff",
+              onChange: (v) => setColor(role, s, v)
+            },
+            s
+          ))
+        ] }, role)),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "flex flex-wrap items-center gap-2 mt-2", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "button",
+            {
+              type: "button",
+              className: BUTTON_OUTLINE_CLASS,
+              onClick: () => applyPatch({
+                colors: {
+                  ...tokens.colors,
+                  primary: generateShades(
+                    tokens.colors.primary?.["500"] || "#3b82f6"
+                  )
+                }
+              }),
+              children: "Auto\u2011generate Primary Shades"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "button",
+            {
+              type: "button",
+              className: BUTTON_OUTLINE_CLASS,
+              onClick: () => applyPatch({
+                colors: {
+                  ...tokens.colors,
+                  primary: generateOklchShades(
+                    tokens.colors.primary?.["500"] || "#3b82f6"
+                  )
+                }
+              }),
+              children: "OKLCH Shades"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "button",
+            {
+              type: "button",
+              className: BUTTON_OUTLINE_CLASS,
+              onClick: () => {
+                const invert = (hex) => {
+                  try {
+                    const [l, a, b] = (0, import_chroma_js2.default)(hex).lab();
+                    return import_chroma_js2.default.lab(Math.max(0, Math.min(100, 100 - l)), a, b).hex();
+                  } catch {
+                    return hex;
+                  }
+                };
+                const mapScale = (scale2) => Object.fromEntries(Object.entries(scale2).map(([k, v]) => [k, invert(v)]));
+                const dark = {};
+                Object.entries(tokens.colors).forEach(([name, scale2]) => {
+                  dark[name] = mapScale(scale2);
+                });
+                applyPatch({ modes: { ...tokens.modes || {}, dark } });
+              },
+              children: "Derive Dark Mode"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "button",
+            {
+              type: "button",
+              className: BUTTON_OUTLINE_CLASS,
+              onClick: () => {
+                const boost = (hex) => {
+                  try {
+                    const c = (0, import_chroma_js2.default)(hex);
+                    const [l, a, b] = c.lab();
+                    const nl = l < 50 ? Math.max(15, l - 20) : Math.min(95, l + 20);
+                    return import_chroma_js2.default.lab(nl, a, b).hex();
+                  } catch {
+                    return hex;
+                  }
+                };
+                const mapScale = (scale2) => Object.fromEntries(Object.entries(scale2).map(([k, v]) => [k, boost(v)]));
+                const hc = {};
+                Object.entries(tokens.colors).forEach(([name, scale2]) => {
+                  hc[name] = mapScale(scale2);
+                });
+                applyPatch({ modes: { ...tokens.modes || {}, highContrast: hc } });
+              },
+              children: "Derive High\u2011Contrast"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "input",
+            {
+              type: "file",
+              accept: "application/json",
+              onChange: async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                try {
+                  const txt = await f.text();
+                  applyPatch(JSON.parse(txt));
+                  window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "ok", msg: "JSON applied" } }));
+                } catch {
+                  try {
+                    window.dispatchEvent(new CustomEvent("af:toast", { detail: { type: "err", msg: "Invalid JSON" } }));
+                  } catch {
+                  }
+                }
+              }
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Presets" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-form-row af-cols-2", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "input",
+            {
+              className: CONTROL_CLASS,
+              type: "text",
+              placeholder: "Preset name",
+              value: presetName,
+              onChange: (e) => setPresetName(e.target.value)
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: BUTTON_OUTLINE_CLASS, onClick: savePreset, children: "Save Preset" })
+        ] }),
         /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
           "div",
           {
             style: {
               display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr auto",
+              gridTemplateColumns: "1fr auto auto",
               gap: "var(--af-space-2)",
-              alignItems: "center",
-              marginTop: "var(--af-space-2)"
+              marginTop: "0.5rem"
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                "input",
-                {
-                  type: "text",
-                  value: wsUrl,
-                  onChange: (e) => setWsUrl(e.target.value),
-                  placeholder: "ws://localhost:4001",
-                  style: {
-                    border: "1px solid var(--af-color-neutral-300)",
-                    borderRadius: "var(--af-radius-sm)",
-                    padding: "0.25rem 0.5rem"
-                  }
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                "input",
-                {
-                  type: "text",
-                  value: room,
-                  onChange: (e) => setRoom(e.target.value),
-                  placeholder: "room",
-                  style: {
-                    border: "1px solid var(--af-color-neutral-300)",
-                    borderRadius: "var(--af-radius-sm)",
-                    padding: "0.25rem 0.5rem"
-                  }
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                "input",
-                {
-                  type: "password",
-                  value: token,
-                  onChange: (e) => setToken(e.target.value),
-                  placeholder: "token (optional)",
-                  style: {
-                    border: "1px solid var(--af-color-neutral-300)",
-                    borderRadius: "var(--af-radius-sm)",
-                    padding: "0.25rem 0.5rem"
-                  }
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                "button",
-                {
-                  onClick: connectWs,
-                  style: {
-                    padding: "0.25rem 0.5rem",
-                    border: "1px solid var(--af-color-neutral-300)",
-                    borderRadius: "var(--af-radius-sm)",
-                    background: connected ? "var(--af-color-success-500)" : "transparent",
-                    color: connected ? "white" : "inherit"
-                  },
-                  children: connected ? "Connected" : "Connect WS"
-                }
-              )
-            ]
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: "Theme mode", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-          "select",
-          {
-            value: theme,
-            onChange: (e) => setTheme(e.target.value),
-            style: {
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-              padding: "0.25rem 0.5rem"
-            },
-            children: [
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "light", children: "Light" }),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "dark", children: "Dark" }),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "hc", children: "High Contrast" })
-            ]
-          }
-        ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: "Density", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-          "select",
-          {
-            value: density,
-            onChange: (e) => setDensity(e.target.value),
-            style: {
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-              padding: "0.25rem 0.5rem"
-            },
-            children: [
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "comfortable", children: "Comfortable" }),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "compact", children: "Compact" })
-            ]
-          }
-        ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Palette" }),
-          ["primary", "neutral"].map((role) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-            "div",
-            {
-              style: {
-                display: "grid",
-                gridTemplateColumns: "120px repeat(6, minmax(0, 1fr))",
-                gap: "var(--af-space-2)",
-                alignItems: "center",
-                marginBottom: "var(--af-space-2)"
-              },
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { color: "var(--af-color-neutral-500)" }, children: role }),
-                SHADE_KEYS.map((s) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                  "input",
-                  {
-                    type: "color",
-                    value: tokens.colors[role]?.[s] || "#ffffff",
-                    onChange: (e) => setColor(role, s, e.target.value)
-                  },
-                  s
-                ))
-              ]
-            },
-            role
-          )),
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { display: "flex", gap: "0.5rem", alignItems: "center" }, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-              "button",
-              {
-                onClick: () => applyPatch({
-                  colors: {
-                    ...tokens.colors,
-                    primary: generateShades(
-                      tokens.colors.primary?.["500"] || "#3b82f6"
-                    )
-                  }
-                }),
-                style: {
-                  padding: "0.25rem 0.5rem",
-                  border: "1px solid var(--af-color-neutral-300)",
-                  borderRadius: "var(--af-radius-sm)"
-                },
-                children: "Auto\u2011generate Primary Shades"
-              }
-            ),
-            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-              "button",
-              {
-                onClick: () => applyPatch({
-                  colors: {
-                    ...tokens.colors,
-                    primary: generateOklchShades(
-                      tokens.colors.primary?.["500"] || "#3b82f6"
-                    )
-                  }
-                }),
-                style: {
-                  padding: "0.25rem 0.5rem",
-                  border: "1px solid var(--af-color-neutral-300)",
-                  borderRadius: "var(--af-radius-sm)"
-                },
-                children: "OKLCH Shades"
-              }
-            ),
-            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-              "input",
-              {
-                type: "file",
-                accept: "application/json",
-                onChange: async (e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  try {
-                    const txt = await f.text();
-                    applyPatch(JSON.parse(txt));
-                  } catch {
-                    alert("Invalid JSON");
-                  }
-                }
-              }
-            )
-          ] })
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Presets" }),
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-            "div",
-            {
-              style: {
-                display: "grid",
-                gridTemplateColumns: "1fr auto",
-                gap: "var(--af-space-2)"
-              },
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                  "input",
-                  {
-                    type: "text",
-                    placeholder: "Preset name",
-                    value: presetName,
-                    onChange: (e) => setPresetName(e.target.value),
-                    style: {
-                      border: "1px solid var(--af-color-neutral-300)",
-                      borderRadius: "var(--af-radius-sm)",
-                      padding: "0.25rem 0.5rem"
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("select", { className: SELECT_CLASS, value: presetKey, onChange: (e) => setPresetKey(e.target.value), children: [
+                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "", children: "Select preset\u2026" }),
+                Object.keys(
+                  (() => {
+                    try {
+                      return JSON.parse(localStorage.getItem("af-presets") || "{}");
+                    } catch {
+                      return {};
                     }
-                  }
-                ),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                  "button",
-                  {
-                    onClick: savePreset,
-                    style: {
-                      padding: "0.25rem 0.5rem",
-                      border: "1px solid var(--af-color-neutral-300)",
-                      borderRadius: "var(--af-radius-sm)"
-                    },
-                    children: "Save Preset"
-                  }
-                )
-              ]
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-            "div",
-            {
-              style: {
-                display: "grid",
-                gridTemplateColumns: "1fr auto auto",
-                gap: "var(--af-space-2)",
-                marginTop: "0.5rem"
-              },
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-                  "select",
-                  {
-                    value: presetKey,
-                    onChange: (e) => setPresetKey(e.target.value),
-                    style: {
-                      border: "1px solid var(--af-color-neutral-300)",
-                      borderRadius: "var(--af-radius-sm)",
-                      padding: "0.25rem 0.5rem"
-                    },
-                    children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "", children: "Select preset\u2026" }),
-                      Object.keys(
-                        (() => {
-                          try {
-                            return JSON.parse(localStorage.getItem("af-presets") || "{}");
-                          } catch {
-                            return {};
-                          }
-                        })()
-                      ).map((k) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: k, children: k }, k))
-                    ]
-                  }
-                ),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                  "button",
-                  {
-                    onClick: loadPreset,
-                    style: {
-                      padding: "0.25rem 0.5rem",
-                      border: "1px solid var(--af-color-neutral-300)",
-                      borderRadius: "var(--af-radius-sm)"
-                    },
-                    children: "Load"
-                  }
-                ),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                  "button",
-                  {
-                    onClick: deletePreset,
-                    style: {
-                      padding: "0.25rem 0.5rem",
-                      border: "1px solid var(--af-color-neutral-300)",
-                      borderRadius: "var(--af-radius-sm)"
-                    },
-                    children: "Delete"
-                  }
-                )
-              ]
-            }
-          )
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { marginTop: "var(--af-space-4)" }, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-          AcssImportWizard,
-          {
-            current: tokens,
-            onApply: (patch) => applyPatch(patch)
+                  })()
+                ).map((k) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: k, children: k }, k))
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: BUTTON_OUTLINE_CLASS, onClick: loadPreset, children: "Load" }),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: BUTTON_OUTLINE_CLASS, onClick: deletePreset, children: "Delete" })
+            ]
           }
-        ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Typography" }),
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: `Scale (${scale.toFixed(2)})`, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+        )
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { marginTop: "var(--af-space-4)" }, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+        AcssImportWizard,
+        {
+          current: tokens,
+          onApply: (patch) => applyPatch(patch)
+        }
+      ) }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Typography" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: `Scale (${scale.toFixed(2)})`, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-flex af-items-center af-gap-3", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
             "input",
             {
               type: "range",
@@ -1149,10 +1411,24 @@ module.exports = {
                   ...tokens.typography,
                   scale: Number(e.target.value)
                 }
-              })
+              }),
+              className: "af-flex-1"
             }
-          ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: `Base size (rem) (${baseRem})`, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "input",
+            {
+              "aria-label": "Scale",
+              type: "number",
+              step: 0.01,
+              value: Number(scale).toFixed(2),
+              onChange: (e) => applyPatch({ typography: { ...tokens.typography, scale: Number(e.target.value) } }),
+              className: `${CONTROL_CLASS} af-input-num`
+            }
+          )
+        ] }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: `Base size (rem) (${baseRem})`, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-flex af-items-center af-gap-3", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
             "input",
             {
               type: "range",
@@ -1165,327 +1441,238 @@ module.exports = {
                   ...tokens.typography,
                   baseRem: Number(e.target.value)
                 }
-              })
+              }),
+              className: "af-flex-1"
             }
-          ) })
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Spacing" }),
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: `Base step (px) (${spaceBase})`, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
             "input",
             {
-              type: "range",
-              min: 2,
-              max: 8,
-              step: 1,
-              value: spaceBase,
-              onChange: (e) => applyPatch({
-                spacing: {
-                  ...tokens.spacing,
-                  base: Number(e.target.value)
-                }
-              })
+              "aria-label": "Base size rem",
+              type: "number",
+              step: 0.01,
+              value: Number(baseRem).toFixed(2),
+              onChange: (e) => applyPatch({ typography: { ...tokens.typography, baseRem: Number(e.target.value) } }),
+              className: `${CONTROL_CLASS} af-input-num`
             }
-          ) })
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Radius" }),
-          Object.entries(tokens.radius).map(([k, v]) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: k, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-            "input",
-            {
-              type: "text",
-              value: v,
-              onChange: (e) => setRadius(k, e.target.value)
-            }
-          ) }, k))
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Shadows" }),
-          Object.entries(tokens.shadows).map(([k, v]) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: k, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-            "input",
-            {
-              type: "text",
-              value: v,
-              onChange: (e) => setShadow(k, e.target.value)
-            }
-          ) }, k))
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-          "div",
+          )
+        ] }) })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Spacing" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: `Base step (px) (${spaceBase})`, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          "input",
           {
-            style: {
-              display: "grid",
-              gap: "var(--af-space-2)",
-              marginTop: "var(--af-space-4)"
-            },
-            children: [
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                "div",
-                {
-                  style: {
-                    fontSize: "var(--af-text-sm)",
-                    color: "var(--af-color-neutral-500)"
-                  },
-                  children: "Preview"
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-                "div",
-                {
-                  style: {
-                    display: "grid",
-                    gap: "var(--af-space-2)",
-                    padding: "var(--af-space-4)",
-                    border: "1px solid var(--af-color-neutral-300)",
-                    borderRadius: "var(--af-radius-md)"
-                  },
-                  children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                      "h1",
-                      {
-                        style: {
-                          fontSize: "var(--af-text-3xl)",
-                          color: "var(--af-color-primary-700)",
-                          margin: 0
-                        },
-                        children: "Heading H1"
-                      }
-                    ),
-                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { style: { fontSize: "var(--af-text-base)", margin: 0 }, children: "Body text scales with viewport width." }),
-                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                      "button",
-                      {
-                        style: {
-                          backgroundColor: "var(--af-color-primary-500)",
-                          color: "white",
-                          padding: "0.5rem 1rem",
-                          borderRadius: "var(--af-radius-md)",
-                          border: 0
-                        },
-                        children: "Button"
-                      }
-                    )
-                  ]
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                "div",
-                {
-                  style: {
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
-                    gap: "var(--af-space-2)"
-                  },
-                  children: (() => {
-                    const p700 = tokens.colors.primary?.["700"] || "#1d4ed8";
-                    const n50 = tokens.colors.neutral?.["50"] || "#f8fafc";
-                    const n900 = tokens.colors.neutral?.["900"] || "#0f172a";
-                    const c1 = contrast(p700, n50);
-                    const c2 = contrast(p700, n900);
-                    const passAA1 = c1 >= 4.5;
-                    const passAA2 = c2 >= 4.5;
-                    return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-                        "div",
-                        {
-                          style: {
-                            border: "1px solid var(--af-color-neutral-300)",
-                            borderRadius: "var(--af-radius-sm)",
-                            padding: "0.75rem"
-                          },
-                          children: [
-                            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                              "div",
-                              {
-                                style: {
-                                  background: n50,
-                                  color: p700,
-                                  padding: "0.5rem",
-                                  borderRadius: "var(--af-radius-sm)"
-                                },
-                                children: "Text sample"
-                              }
-                            ),
-                            /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { fontSize: "var(--af-text-sm)" }, children: [
-                              "Contrast: ",
-                              c1,
-                              ":1 ",
-                              passAA1 ? "\u2713 AA" : "\u2715"
-                            ] }),
-                            !passAA1 && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                              "button",
-                              {
-                                onClick: () => applyPatch({
-                                  colors: {
-                                    ...tokens.colors,
-                                    primary: {
-                                      ...tokens.colors.primary,
-                                      700: adjustForContrastAAA(p700, n50)
-                                    }
-                                  }
-                                }),
-                                style: {
-                                  marginTop: "0.25rem",
-                                  padding: "0.25rem 0.5rem",
-                                  border: "1px solid var(--af-color-neutral-300)",
-                                  borderRadius: "var(--af-radius-sm)"
-                                },
-                                children: "Auto-fix AAA"
-                              }
-                            )
-                          ]
-                        }
-                      ),
-                      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-                        "div",
-                        {
-                          style: {
-                            border: "1px solid var(--af-color-neutral-300)",
-                            borderRadius: "var(--af-radius-sm)",
-                            padding: "0.75rem"
-                          },
-                          children: [
-                            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                              "div",
-                              {
-                                style: {
-                                  background: n900,
-                                  color: p700,
-                                  padding: "0.5rem",
-                                  borderRadius: "var(--af-radius-sm)"
-                                },
-                                children: "Text sample"
-                              }
-                            ),
-                            /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { fontSize: "var(--af-text-sm)" }, children: [
-                              "Contrast: ",
-                              c2,
-                              ":1 ",
-                              passAA2 ? "\u2713 AA" : "\u2715"
-                            ] }),
-                            !passAA2 && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-                              "button",
-                              {
-                                onClick: () => applyPatch({
-                                  colors: {
-                                    ...tokens.colors,
-                                    primary: {
-                                      ...tokens.colors.primary,
-                                      700: adjustForContrastAAA(p700, n900)
-                                    }
-                                  }
-                                }),
-                                style: {
-                                  marginTop: "0.25rem",
-                                  padding: "0.25rem 0.5rem",
-                                  border: "1px solid var(--af-color-neutral-300)",
-                                  borderRadius: "var(--af-radius-sm)"
-                                },
-                                children: "Auto-fix AAA"
-                              }
-                            )
-                          ]
-                        }
-                      ),
-                      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", {})
-                    ] });
-                  })()
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { marginTop: "var(--af-space-2)" }, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-                "button",
-                {
-                  onClick: () => setShowReport((s) => !s),
-                  style: {
-                    padding: "0.25rem 0.5rem",
-                    border: "1px solid var(--af-color-neutral-300)",
-                    borderRadius: "var(--af-radius-sm)"
-                  },
-                  children: [
-                    showReport ? "Hide" : "Generate",
-                    " Report"
-                  ]
-                }
-              ) }),
-              showReport && /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-                "div",
-                {
-                  style: {
-                    border: "1px solid var(--af-color-neutral-300)",
-                    borderRadius: "var(--af-radius-sm)",
-                    padding: "0.75rem"
-                  },
-                  children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "0.5rem" }, children: "Palette Report (\u0394LCH and AA/AAA)" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
-                      "div",
-                      {
-                        style: {
-                          display: "grid",
-                          gridTemplateColumns: "140px repeat(4, minmax(0, 1fr))",
-                          gap: "0.5rem",
-                          fontSize: "var(--af-text-sm)"
-                        },
-                        children: [
-                          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { children: "Role" }),
-                          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { children: "\u0394LCH(700\u2192500)" }),
-                          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { children: "Contrast on Neutral 50" }),
-                          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { children: "Contrast on Neutral 900" }),
-                          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { children: "Notes" }),
-                          Object.keys(tokens.colors).map((role) => {
-                            const r = tokens.colors[role];
-                            const n = tokens.colors.neutral || {};
-                            const p700 = r?.["700"];
-                            const p500 = r?.["500"];
-                            const n50 = n?.["50"] || "#f8fafc";
-                            const n900 = n?.["900"] || "#0f172a";
-                            const d = (() => {
-                              try {
-                                const colorA = (0, import_chroma_js2.default)(p700);
-                                const colorB = (0, import_chroma_js2.default)(p500);
-                                const labA = colorA.lab();
-                                const labB = colorB.lab();
-                                const dL = Math.abs(labA[0] - labB[0]);
-                                const dA = Math.abs(labA[1] - labB[1]);
-                                const dB = Math.abs(labA[2] - labB[2]);
-                                return `\u0394L ${dL.toFixed(3)} \u0394a ${dA.toFixed(
-                                  3
-                                )} \u0394b ${dB.toFixed(1)}`;
-                              } catch {
-                                return "n/a";
-                              }
-                            })();
-                            const c1 = contrast(p700 || "#000", n50);
-                            const c2 = contrast(p700 || "#000", n900);
-                            const tag = (ratio) => ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : "Fail";
-                            return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react4.default.Fragment, { children: [
-                              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { children: role }),
-                              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { children: d }),
-                              /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { children: [
-                                c1,
-                                ":1 ",
-                                tag(c1)
-                              ] }),
-                              /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { children: [
-                                c2,
-                                ":1 ",
-                                tag(c2)
-                              ] }),
-                              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { children: tag(c1) === "Fail" || tag(c2) === "Fail" ? "Consider auto-fix" : "" })
-                            ] }, role);
-                          })
-                        ]
-                      }
-                    )
-                  ]
-                }
-              )
-            ]
+            type: "range",
+            min: 2,
+            max: 8,
+            step: 1,
+            value: spaceBase,
+            onChange: (e) => applyPatch({
+              spacing: {
+                ...tokens.spacing,
+                base: Number(e.target.value)
+              }
+            })
           }
-        )
-      ]
-    }
-  );
+        ) })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Radius" }),
+        Object.entries(tokens.radius).map(([k, v]) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: k, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          "input",
+          {
+            type: "text",
+            value: v,
+            onChange: (e) => setRadius(k, e.target.value),
+            className: CONTROL_CLASS
+          }
+        ) }, k))
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: "var(--af-space-4)" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { fontWeight: 600, marginBottom: "var(--af-space-2)" }, children: "Shadows" }),
+        Object.entries(tokens.shadows).map(([k, v]) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Row, { label: k, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          "input",
+          {
+            type: "text",
+            value: v,
+            onChange: (e) => setShadow(k, e.target.value),
+            className: CONTROL_CLASS
+          }
+        ) }, k))
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+        "div",
+        {
+          style: {
+            display: "grid",
+            gap: "var(--af-space-2)",
+            marginTop: "var(--af-space-4)"
+          },
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "text-sm text-muted-foreground", children: "Preview" }),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-preview-card", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-preview-grid", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("h1", { style: { fontSize: "var(--af-text-2xl)", color: "var(--af-color-primary-700)", margin: 0 }, children: "Heading H1" }),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { style: { fontSize: "var(--af-text-base)", margin: 0, color: "var(--af-color-neutral-700)" }, children: "Body text scales with viewport width." }),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: BUTTON_PRIMARY_CLASS, style: { alignSelf: "start" }, children: "Button" })
+            ] }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+              "div",
+              {
+                style: {
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: "var(--af-space-2)"
+                },
+                children: (() => {
+                  const p700 = tokens.colors.primary?.["700"] || "#1d4ed8";
+                  const n50 = tokens.colors.neutral?.["50"] || "#f8fafc";
+                  const n900 = tokens.colors.neutral?.["900"] || "#0f172a";
+                  const c1 = contrast(p700, n50);
+                  const c2 = contrast(p700, n900);
+                  const passAA1 = c1 >= 4.5;
+                  const passAA2 = c2 >= 4.5;
+                  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-card-sm", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+                        "div",
+                        {
+                          style: {
+                            background: n50,
+                            color: p700,
+                            padding: "0.5rem",
+                            borderRadius: "var(--af-radius-sm)"
+                          },
+                          children: "Text sample"
+                        }
+                      ),
+                      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { fontSize: "var(--af-text-sm)" }, children: [
+                        "Contrast: ",
+                        c1,
+                        ":1 ",
+                        passAA1 ? "\u2713 AA" : "\u2715"
+                      ] }),
+                      !passAA1 && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+                        "button",
+                        {
+                          type: "button",
+                          className: `${BUTTON_OUTLINE_CLASS} mt-2`,
+                          onClick: () => applyPatch({
+                            colors: {
+                              ...tokens.colors,
+                              primary: {
+                                ...tokens.colors.primary,
+                                700: adjustForContrastAAA(p700, n50)
+                              }
+                            }
+                          }),
+                          children: "Auto-fix AAA"
+                        }
+                      )
+                    ] }),
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-card-sm", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+                        "div",
+                        {
+                          style: {
+                            background: n900,
+                            color: p700,
+                            padding: "0.5rem",
+                            borderRadius: "var(--af-radius-sm)"
+                          },
+                          children: "Text sample"
+                        }
+                      ),
+                      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { fontSize: "var(--af-text-sm)" }, children: [
+                        "Contrast: ",
+                        c2,
+                        ":1 ",
+                        passAA2 ? "\u2713 AA" : "\u2715"
+                      ] }),
+                      !passAA2 && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+                        "button",
+                        {
+                          type: "button",
+                          className: `${BUTTON_OUTLINE_CLASS} mt-2`,
+                          onClick: () => applyPatch({
+                            colors: {
+                              ...tokens.colors,
+                              primary: {
+                                ...tokens.colors.primary,
+                                700: adjustForContrastAAA(p700, n900)
+                              }
+                            }
+                          }),
+                          children: "Auto-fix AAA"
+                        }
+                      )
+                    ] }),
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", {})
+                  ] });
+                })()
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { marginTop: "var(--af-space-2)" }, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("button", { type: "button", className: BUTTON_OUTLINE_CLASS, onClick: () => setShowReport((s) => !s), children: [
+              showReport ? "Hide" : "Generate",
+              " Report"
+            ] }) }),
+            showReport && /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-card af-card-muted", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-report-header", style: { marginBottom: "0.5rem" }, children: "Palette Report (\u0394LCH and AA/AAA)" }),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-report-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-report-header", children: "Role" }),
+                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-report-header", children: "\u0394LCH(700\u2192500)" }),
+                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-report-header", children: "Contrast on Neutral 50" }),
+                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-report-header", children: "Contrast on Neutral 900" }),
+                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-report-header", children: "Notes" }),
+                Object.keys(tokens.colors).map((role) => {
+                  const r = tokens.colors[role];
+                  const n = tokens.colors.neutral || {};
+                  const p700 = r?.["700"];
+                  const p500 = r?.["500"];
+                  const n50 = n?.["50"] || "#f8fafc";
+                  const n900 = n?.["900"] || "#0f172a";
+                  const d = (() => {
+                    try {
+                      const colorA = (0, import_chroma_js2.default)(p700);
+                      const colorB = (0, import_chroma_js2.default)(p500);
+                      const labA = colorA.lab();
+                      const labB = colorB.lab();
+                      const dL = Math.abs(labA[0] - labB[0]);
+                      const dA = Math.abs(labA[1] - labB[1]);
+                      const dB = Math.abs(labA[2] - labB[2]);
+                      return `\u0394L ${dL.toFixed(3)} \u0394a ${dA.toFixed(
+                        3
+                      )} \u0394b ${dB.toFixed(1)}`;
+                    } catch {
+                      return "n/a";
+                    }
+                  })();
+                  const c1 = contrast(p700 || "#000", n50);
+                  const c2 = contrast(p700 || "#000", n900);
+                  const tag = (ratio) => ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : "Fail";
+                  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react4.default.Fragment, { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-report-cell", children: role }),
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-report-cell", children: d }),
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-report-cell", children: [
+                      c1,
+                      ":1 ",
+                      tag(c1)
+                    ] }),
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "af-report-cell", children: [
+                      c2,
+                      ":1 ",
+                      tag(c2)
+                    ] }),
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "af-report-cell", children: tag(c1) === "Fail" || tag(c2) === "Fail" ? "Consider auto-fix" : "" })
+                  ] }, role);
+                })
+              ] })
+            ] })
+          ]
+        }
+      )
+    ] })
+  ] });
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

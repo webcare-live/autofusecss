@@ -1,8 +1,3 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/doc/[...slug]/page": "app/doc/[...slug]/page.js",
-  "/utilities/page": "app/utilities/page.js",
-  "/api/tokens/route": "app/api/tokens/route.js",
-  "/page": "app/page.js",
   "/studio/page": "app/studio/page.js"
 }

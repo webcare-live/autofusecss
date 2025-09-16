@@ -1,1 +1,11 @@
-{"version":4,"routes":{"/utilities":{"experimentalBypassFor":[{"type":"header","key":"Next-Action"},{"type":"header","key":"content-type","value":"multipart/form-data;.*"}],"initialRevalidateSeconds":false,"srcRoute":"/utilities","dataRoute":"/utilities.rsc"},"/studio":{"experimentalBypassFor":[{"type":"header","key":"Next-Action"},{"type":"header","key":"content-type","value":"multipart/form-data;.*"}],"initialRevalidateSeconds":false,"srcRoute":"/studio","dataRoute":"/studio.rsc"},"/":{"experimentalBypassFor":[{"type":"header","key":"Next-Action"},{"type":"header","key":"content-type","value":"multipart/form-data;.*"}],"initialRevalidateSeconds":false,"srcRoute":"/","dataRoute":"/index.rsc"}},"dynamicRoutes":{},"notFoundRoutes":[],"preview":{"previewModeId":"d45f77074ac2fbe20fab6f28a073ea4d","previewModeSigningKey":"db17f3eb16235574a8e629b872a509a59dec83ac31b1a826b5c0fd4e0ce0c02a","previewModeEncryptionKey":"3c9b1efecb17e2e2dc37ca8b887ede96bf0cf591dd2eb3a67c2821f35442336f"}}
+{
+  "version": 4,
+  "routes": {},
+  "dynamicRoutes": {},
+  "notFoundRoutes": [],
+  "preview": {
+    "previewModeId": "6ba29451f1735ee0df176e9ddc78f268",
+    "previewModeSigningKey": "d5e6e3e4f133214e2bcdcb136612aab3c36a226e097f9b18fe6033c89190b274",
+    "previewModeEncryptionKey": "009f6f93e03cde915141f37bef378a4a52ee22f2fc3339308510f7bbf6f06207"
+  }
+}

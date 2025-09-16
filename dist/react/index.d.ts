@@ -1,4 +1,4 @@
-export { AutofuseProvider, AutofuseProviderProps } from '../index.js';
+export { A as AutofuseProvider, a as AutofuseProviderProps } from '../Provider-BC53Ba7f.js';
 import { A as AutofuseTokens } from '../tokens-CFYw5wM2.js';
 import * as react_jsx_runtime from 'react/jsx-runtime';
 import 'react';

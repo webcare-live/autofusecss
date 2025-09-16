@@ -219,6 +219,8 @@ type BuildOpts = {
   report?: boolean;
   analyze?: boolean;
   optimize?: boolean;
+  layer?: string;
+  noLayer?: boolean;
 };
 
 function applyPreset(tokens: AutofuseTokens, preset?: string): AutofuseTokens {
@@ -257,7 +259,11 @@ async function cmdBuild(cwd: string, opts: BuildOpts) {
     baseCss = extractSections(baseCss, includes);
   }
 
-  let out = `${cssVars}\n${baseCss}`;
+  let bodyCss = baseCss;
+  // Default to @layer autofuse unless explicitly disabled
+  const selectedLayer = opts.noLayer ? undefined : (opts.layer || 'autofuse');
+  if (selectedLayer && selectedLayer !== 'none') bodyCss = `@layer ${selectedLayer}{\n${bodyCss}\n}`;
+  let out = `${cssVars}\n${bodyCss}`;
 
   // Pre-minification analysis for optimization suggestions
   const preMinifySize = Buffer.byteLength(out, "utf8");
@@ -279,6 +285,7 @@ async function cmdBuild(cwd: string, opts: BuildOpts) {
     console.log(
       `  spacing base: ${tokens.spacing.base}px, type base: ${tokens.typography.baseRem}rem`
     );
+    if (selectedLayer) console.log(`  wrapped in @layer ${selectedLayer}`);
 
     if (opts.minify) {
       const savings = preMinifySize - finalSize;
@@ -358,6 +365,7 @@ async function main() {
         let report = false;
         let analyze = false;
         let optimize = false;
+        let layer: string | undefined;
         for (let i = 0; i < rest.length; i++) {
           const a = rest[i];
           if (a === "--out") out = rest[++i];
@@ -368,6 +376,8 @@ async function main() {
           else if (a === "--report") report = true;
           else if (a === "--analyze") analyze = true;
           else if (a === "--optimize") optimize = true;
+          else if (a === "--layer") layer = rest[++i];
+          else if (a === "--no-layer") layer = 'none';
         }
         await cmdBuild(cwd, {
           out,
@@ -377,6 +387,8 @@ async function main() {
           report,
           analyze,
           optimize,
+          layer,
+          noLayer: layer === 'none',
         });
       }
       break;
@@ -385,7 +397,7 @@ async function main() {
       console.log("  Usage: autofusecss <init|build> [options]");
       console.log("    init [--ts]");
       console.log(
-        "    build [--out <file>] [--minify] [--include-utils <list>] [--preset <compact|comfortable|spacious|dark>] [--report] [--analyze] [--optimize]"
+        "    build [--out <file>] [--minify] [--include-utils <list>] [--layer <name>|--no-layer] [--preset <compact|comfortable|spacious|dark>] [--report] [--analyze] [--optimize]"
       );
       console.log("");
       console.log("  Analysis flags:");

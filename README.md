@@ -61,10 +61,9 @@ This standalone repository includes everything needed for autofusecss developmen
 ### Theme System
 
 ```tsx
-<AutofuseProvider theme="base">      {/* Balanced design */}
-<AutofuseProvider theme="compact">   {/* Tight spacing */}
-<AutofuseProvider theme="comfortable"> {/* Breathing room */}
-<AutofuseProvider theme="spacious">  {/* Maximum comfort */}
+<AutofuseProvider theme="light">      {/* default */}
+<AutofuseProvider theme="dark">       {/* dark mode */}
+<AutofuseProvider theme="hc">         {/* high‑contrast */}
 ```
 
 ## 🛠️ Development Workflow
@@ -139,7 +138,7 @@ See [examples/README.md](./examples/README.md) for complete usage instructions.
 - **Modern CSS**: Uses clamp(), calc(), custom properties
 - **Tree-shakeable**: Import only what you need
 
-## �� Published Package
+## 📦 Published Package
 
 **NPM**: `autofusecss@0.0.1`
 
@@ -184,3 +183,28 @@ MIT License - see LICENSE file for details.
 ---
 
 **AutofuseCSS** brings the power of CSS Framework to React with modern tooling, mathematical precision, and developer-friendly APIs. Build fluid responsive interfaces that adapt beautifully across all devices.
+
+## 🧩 SaaS Integration
+
+- React-first: drop `<AutofuseProvider>` at your app root and all utilities work immediately via CSS variables.
+- Multi‑tenant theming: host tokens per tenant and swap at runtime.
+- Two options for tokens:
+  - Static config: ship `autofusecss.config.mjs` and build with `npx autofusecss build`.
+  - Dynamic: run the included tokens API (`npm run tokens:server`) and call `PUT /api/tokens` to persist. Use the Theme Studio to live‑edit and broadcast via WebSocket.
+
+Minimal dynamic wiring example:
+
+```tsx
+import { AutofuseProvider } from 'autofusecss/react'
+
+export default function AppRoot({ children }: { children: React.ReactNode }) {
+  const [tokens, setTokens] = React.useState<any>(null)
+  React.useEffect(() => {
+    fetch('/api/tokens').then(r=>r.json()).then(setTokens)
+  }, [])
+  if (!tokens) return null
+  return <AutofuseProvider tokens={tokens}>{children}</AutofuseProvider>
+}
+```
+
+Everything (colors, typography scale/base, spacing base, radius, shadows) can be changed from the frontend using the provided `ThemeStudio` component. These updates patch the Provider’s tokens and are applied instantly via CSS variables with zero page reloads.

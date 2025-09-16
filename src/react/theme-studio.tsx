@@ -3,40 +3,189 @@
 import React from "react";
 import merge from "deepmerge";
 import chroma from "chroma-js";
+import type { AutofuseTokens } from "../tokens.js";
 import { useAutofuse } from "./context.js";
 import { AcssImportWizard } from "./acss-import.js";
 
-function Row({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+// Top-level HSL helpers (used by color popover and generators)
+function hexToRgb(hex: string) {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255] as const;
+}
+function hexToHsl(hex: string) {
+  const [r0, g0, b0] = hexToRgb(hex).map((v) => v / 255);
+  const max = Math.max(r0, g0, b0), min = Math.min(r0, g0, b0);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r0: h = (g0 - b0) / d + (g0 < b0 ? 6 : 0); break;
+      case g0: h = (b0 - r0) / d + 2; break;
+      case b0: h = (r0 - g0) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return [h * 360, s, l] as const;
+}
+function hslToHex(h: number, s: number, l: number) {
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const c = l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
+    return Math.round(255 * c).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 2fr",
-        gap: "var(--af-space-4)",
-        alignItems: "center",
-        margin: "var(--af-space-2) 0",
-      }}
-    >
-      <div
-        style={{
-          fontSize: "var(--af-text-sm)",
-          color: "var(--af-color-neutral-500)",
-        }}
-      >
-        {label}
-      </div>
-      <div>{children}</div>
+    <div className="af-grid-12 af-gap-3 af-items-center mt-2 mb-2">
+      <div className="af-col-span-4 text-sm text-muted-foreground">{label}</div>
+      <div className="af-col-span-8 min-w-0">{children}</div>
     </div>
   );
 }
 
+const CONTROL_CLASS =
+  "h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background transition";
+const SELECT_CLASS = `${CONTROL_CLASS} appearance-none`;
+const SMALL_CONTROL_CLASS =
+  "h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background transition";
+const BUTTON_PRIMARY_CLASS =
+  "af-btn-modern af-btn-primary h-9 px-4 focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background transition";
+const BUTTON_OUTLINE_CLASS =
+  "af-btn-modern af-btn-outline h-9 px-4 focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background transition";
+const BUTTON_GHOST_CLASS =
+  "af-btn-modern af-btn-outline h-9 px-3 focus-visible:ring-2 ring-ring ring-offset-2 ring-offset-background transition";
+
 const SHADE_KEYS = ["50", "100", "300", "500", "700", "900"] as const;
+
+function clampHex(v: string) {
+  const x = v.trim().replace(/^#?/, "").toUpperCase();
+  if (x.length === 3 || x.length === 6) return `#${x}`;
+  if (x.length > 6) return `#${x.slice(0, 6)}`;
+  return `#${x.padEnd(6, '0')}`;
+}
+
+function ColorCell({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const [hex, setHex] = React.useState(value);
+  React.useEffect(() => setHex(value), [value]);
+  React.useEffect(() => {
+    const onDoc = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
+  }, []);
+  React.useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+  const sysRef = React.useRef<HTMLInputElement | null>(null);
+  const adjust = (deltaL: number) => {
+    try { const c = chroma(hex); const [l,a,b] = c.lab(); const nl = Math.max(0, Math.min(100, l + deltaL)); const out = chroma.lab(nl,a,b).hex(); setHex(out); onChange(out); } catch {}
+  };
+  return (
+    <div style={{ position: 'relative' }} ref={ref}>
+      <button type="button" className="af-color-picker" aria-label="Pick color" onClick={() => setOpen((s) => !s)} style={{ background: value }} />
+      <input ref={sysRef} type="color" value={value} onChange={(e) => onChange(e.target.value)} style={{ position:'absolute', width:1, height:1, opacity:0, pointerEvents:'none' }} aria-hidden />
+      {open && (
+        <>
+          <div className="fixed inset-0 z-overlay bg-overlay backdrop-blur-sm" aria-hidden onClick={() => setOpen(false)} />
+          <div
+            className="af-popover z-popover"
+            role="dialog"
+            aria-label="Color picker"
+            aria-modal="true"
+            style={{ top: '2.75rem', left: 0 }}
+          >
+            <div className="af-popover-row" style={{ marginBottom: '0.25rem' }}>
+              <span className="af-popover-title">Color</span>
+              <span className="af-color-swatch" style={{ background: hex }} />
+            </div>
+            <div className="af-popover-row" style={{ marginBottom: '0.25rem' }}>
+              <input
+                className={`${SMALL_CONTROL_CLASS} af-input-hex`}
+                value={hex}
+                onChange={(e) => {
+                  const v = clampHex(e.target.value);
+                  setHex(v);
+                  onChange(v);
+                }}
+              />
+              <button
+                type="button"
+                className={BUTTON_GHOST_CLASS}
+                onClick={() => {
+                  try { sysRef.current?.click(); } catch {}
+                }}
+              >
+                System…
+              </button>
+            </div>
+            <div className="af-popover-row" style={{ gap: '0.75rem', marginBottom: '0.25rem' }}>
+              <label className="af-text-sm" style={{ width: '1.25rem' }}>H</label>
+              {(() => {
+                let [h,s,l] = hexToHsl(hex);
+                return (
+                  <input
+                    className="af-flex-1"
+                    type="range"
+                    min={0}
+                    max={360}
+                    step={1}
+                    value={h}
+                    onChange={(e) => {
+                      const nh = Number(e.target.value);
+                      const v = hslToHex(nh, s, l);
+                      setHex(v);
+                      onChange(v);
+                    }}
+                  />
+                );
+              })()}
+            </div>
+            <div className="af-popover-row" style={{ gap: '0.75rem', marginBottom: '0.25rem' }}>
+              <label className="af-text-sm" style={{ width: '1.25rem' }}>S</label>
+              {(() => {
+                let [h,s,l] = hexToHsl(hex);
+                return (
+                  <input
+                    className="af-flex-1"
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={s}
+                    onChange={(e) => {
+                      const ns = Number(e.target.value);
+                      const v = hslToHex(h, ns, l);
+                      setHex(v);
+                      onChange(v);
+                    }}
+                  />
+                );
+              })()}
+            </div>
+            <div className="af-color-actions">
+              <button type="button" className={BUTTON_GHOST_CLASS} onClick={() => adjust(-10)}>-10L</button>
+              <button type="button" className={BUTTON_GHOST_CLASS} onClick={() => adjust(-5)}>-5L</button>
+              <button type="button" className={BUTTON_GHOST_CLASS} onClick={() => adjust(5)}>+5L</button>
+              <button type="button" className={BUTTON_GHOST_CLASS} onClick={() => adjust(10)}>+10L</button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export function ThemeStudio() {
   const { tokens, setTokens, theme, setTheme, density, setDensity } =
@@ -48,11 +197,11 @@ export function ThemeStudio() {
 
   // WS broadcast helpers
   const wsRef = React.useRef<WebSocket | null>(null);
-  const clientId = React.useRef(Math.random().toString(36).slice(2));
-  const applyPatch = (patch: any) => {
+  const clientId = React.useRef<string>(Math.random().toString(36).slice(2));
+  const applyPatch = (patch: Partial<AutofuseTokens>) => {
     setTokens(patch);
     try {
-      const next = merge(tokens as any, patch as any);
+      const next = merge(tokens as AutofuseTokens, patch as Partial<AutofuseTokens>);
       wsRef.current?.send(
         JSON.stringify({
           type: "tokens:update",
@@ -68,13 +217,19 @@ export function ThemeStudio() {
       ...(tokens.colors as any)[role],
     };
     roleScale[shade] = value;
-    applyPatch({ colors: { ...tokens.colors, [role]: roleScale } as any });
+    applyPatch({ colors: { ...(tokens.colors as any), [role]: roleScale } as any });
   };
 
   const setRadius = (k: string, v: string) =>
     applyPatch({ radius: { ...tokens.radius, [k]: v } as any });
   const setShadow = (k: string, v: string) =>
     applyPatch({ shadows: { ...tokens.shadows, [k]: v } as any });
+
+  const [copied, setCopied] = React.useState(false);
+  const [exported, setExported] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [savedOk, setSavedOk] = React.useState(false);
+  const [loadingTokens, setLoadingTokens] = React.useState(false);
 
   const exportConfig = () => {
     const content = `// autofusecss config generated from ThemeStudio\nimport { defineConfig } from 'autofusecss';\n\nexport default defineConfig(${JSON.stringify(
@@ -89,6 +244,9 @@ export function ThemeStudio() {
       a.download = "autofusecss.config.mjs";
       a.click();
       URL.revokeObjectURL(a.href);
+      setExported(true);
+      setTimeout(() => setExported(false), 1200);
+      try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'ok', msg: 'Config exported' } })); } catch {}
     }
   };
 
@@ -100,16 +258,17 @@ export function ThemeStudio() {
     )} })]\n};\n`;
     try {
       await navigator.clipboard.writeText(cfg);
-      alert("Tailwind config copied");
-    } catch {}
+      setCopied(true); setTimeout(() => setCopied(false), 1200);
+      try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'ok', msg: 'Tailwind config copied' } })); } catch {}
+    } catch { try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'err', msg: 'Copy failed' } })); } catch {} }
   };
 
   // Presets (save/load to localStorage)
-  const [presetName, setPresetName] = React.useState("default");
-  const [presetKey, setPresetKey] = React.useState("");
-  const getPresets = (): Record<string, any> => {
+  const [presetName, setPresetName] = React.useState<string>("default");
+  const [presetKey, setPresetKey] = React.useState<string>("");
+  const getPresets = (): Record<string, AutofuseTokens> => {
     try {
-      return JSON.parse(localStorage.getItem("af-presets") || "{}");
+      return JSON.parse(localStorage.getItem("af-presets") || "{}") as Record<string, AutofuseTokens>;
     } catch {
       return {};
     }
@@ -119,8 +278,8 @@ export function ThemeStudio() {
       const p = getPresets();
       p[presetName || "preset"] = tokens;
       localStorage.setItem("af-presets", JSON.stringify(p));
-      alert("Preset saved");
-    } catch {}
+      try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'ok', msg: 'Preset saved' } })); } catch {}
+    } catch { try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'err', msg: 'Save preset failed' } })); } catch {} }
   };
   const loadPreset = () => {
     try {
@@ -138,18 +297,46 @@ export function ThemeStudio() {
     } catch {}
   };
 
-  const saveToServer = async () => {
+  const apiFromWs = (ws: string) => {
     try {
-      await fetch("/api/tokens", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tokens }),
-      });
-      alert("Saved tokens to /api/tokens");
+      const u = new URL(ws);
+      const proto = u.protocol === "wss:" ? "https:" : "http:";
+      return `${proto}//${u.host}`;
+    } catch {
+      return "";
+    }
+  };
+
+  const saveToServer = async () => {
+    const base = apiFromWs(wsUrl);
+    const url = base ? `${base}/api/tokens?room=${encodeURIComponent(room)}` : `/api/tokens?room=${encodeURIComponent(room)}`;
+    try {
+      setSaving(true);
+      await fetch(url, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(tokens) });
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 1200);
+      try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'ok', msg: 'Tokens saved' } })); } catch {}
     } catch (e) {
       console.error(e);
-      alert("Save failed. Is the API running?");
-    }
+      try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'err', msg: 'Save failed' } })); } catch {}
+    } finally { setSaving(false); }
+  };
+
+  const loadFromServer = async (targetRoom?: string) => {
+    const r = targetRoom || room;
+    const base = apiFromWs(wsUrl);
+    const url = base ? `${base}/api/tokens?room=${encodeURIComponent(r)}` : `/api/tokens?room=${encodeURIComponent(r)}`;
+    try {
+      setLoadingTokens(true);
+      const res = await fetch(url);
+      const data = await res.json();
+      const t = (data && data.colors) ? data : data?.tokens;
+      if (t) { applyPatch(t); try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'ok', msg: 'Tokens loaded' } })); } catch {} }
+      else try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'err', msg: 'No tokens stored' } })); } catch {}
+    } catch (e) {
+      console.error(e);
+      try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'err', msg: 'Load failed' } })); } catch {}
+    } finally { setLoadingTokens(false); }
   };
 
   // Live updates via WebSocket (optional)
@@ -163,6 +350,7 @@ export function ThemeStudio() {
     typeof window !== "undefined" ? localStorage.getItem("af-token") || "" : ""
   );
   const [connected, setConnected] = React.useState(false);
+  const [cloneRoom, setCloneRoom] = React.useState<string>("production");
   const connectWs = () => {
     try {
       wsRef.current?.close();
@@ -218,42 +406,6 @@ export function ThemeStudio() {
   };
 
   // Auto shade generation from a base hex (simple HSL lightness steps)
-  const hexToHsl = (hex: string) => {
-    const [r0, g0, b0] = hexToRgb(hex).map((v) => v / 255);
-    const max = Math.max(r0, g0, b0),
-      min = Math.min(r0, g0, b0);
-    let h = 0,
-      s = 0,
-      l = (max + min) / 2;
-    if (max !== min) {
-      const d = max - min;
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      switch (max) {
-        case r0:
-          h = (g0 - b0) / d + (g0 < b0 ? 6 : 0);
-          break;
-        case g0:
-          h = (b0 - r0) / d + 2;
-          break;
-        case b0:
-          h = (r0 - g0) / d + 4;
-          break;
-      }
-      h /= 6;
-    }
-    return [h * 360, s, l] as const;
-  };
-  const hslToHex = (h: number, s: number, l: number) => {
-    const f = (n: number) => {
-      const k = (n + h / 30) % 12;
-      const a = s * Math.min(l, 1 - l);
-      const c = l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
-      return Math.round(255 * c)
-        .toString(16)
-        .padStart(2, "0");
-    };
-    return `#${f(0)}${f(8)}${f(4)}`;
-  };
   const generateShades = (base: string) => {
     const [h, s, l] = hexToHsl(base);
     const steps: Record<string, string> = {
@@ -323,144 +475,161 @@ export function ThemeStudio() {
   };
 
   const [showReport, setShowReport] = React.useState(false);
+  const [toasts, setToasts] = React.useState<Array<{ id: number; type: 'ok'|'err'; msg: string }>>([]);
+  React.useEffect(() => {
+    const onToast = (e: any) => {
+      const id = Date.now() + Math.random();
+      setToasts((q) => [...q, { id, ...(e.detail || { type: 'ok', msg: '' }) }]);
+      setTimeout(() => setToasts((q) => q.filter((t) => t.id !== id)), 1800);
+    };
+    window.addEventListener('af:toast' as any, onToast);
+    return () => window.removeEventListener('af:toast' as any, onToast);
+  }, []);
+
+  const lastToast = toasts.length ? toasts[toasts.length - 1]?.msg : '';
 
   return (
-    <div
-      style={{
-        display: "block",
-        padding: "var(--af-space-4)",
-        border: "1px solid var(--af-color-neutral-300)",
-        borderRadius: "var(--af-radius-md)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <h3 style={{ fontSize: "var(--af-text-lg)", margin: 0 }}>
-          Autofuse Theme Studio
-        </h3>
-        <div style={{ display: "flex", gap: "var(--af-space-2)" }}>
+    <div className="af-theme-studio bg-background text-foreground border border-border shadow-lg rounded-xl">
+      {toasts.length > 0 && (
+        <div className="af-toast-container">
+          {toasts.map((t) => (
+            <div key={t.id} className={`af-toast ${t.type === 'ok' ? 'af-toast-ok' : 'af-toast-err'}`}>{t.msg}</div>
+          ))}
+        </div>
+      )}
+      <div className="af-sr-only" aria-live="polite" role="status">{saving ? 'Saving…' : savedOk ? 'Saved' : ''} {lastToast || ''}</div>
+      <div className="af-studio-header sticky top-0 z-header bg-background/80 backdrop-blur border-b border-border">
+        <div className="af-studio-title-section">
+          <h3 className="af-studio-title">Autofuse Theme Studio</h3>
+          <p className="af-studio-subtitle">Craft your perfect design system with real-time visual feedback</p>
+        </div>
+        <div className="af-studio-actions">
           <button
+            type="button"
             onClick={exportConfig}
-            style={{
-              padding: "0.25rem 0.5rem",
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-            }}
+            className={BUTTON_OUTLINE_CLASS}
+            aria-label="Export Config"
           >
-            Export
+            <span>💾</span>
+            Export Config
+            {exported && <span className="af-ghost-tip" aria-hidden>✓ Copied</span>}
           </button>
           <button
+            type="button"
             onClick={saveToServer}
-            style={{
-              padding: "0.25rem 0.5rem",
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-            }}
+            className={`${BUTTON_PRIMARY_CLASS} ${saving ? 'af-btn-loading' : ''}`}
+            disabled={saving}
+            aria-pressed={saving}
+            aria-busy={saving}
           >
-            Save
+            <span>💾</span>
+            {saving ? 'Saving…' : savedOk ? 'Saved ✓' : 'Save'}
           </button>
           <button
+            type="button"
             onClick={copyTailwindConfig}
-            style={{
-              padding: "0.25rem 0.5rem",
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-            }}
+            className={BUTTON_OUTLINE_CLASS}
+            aria-label="Copy Tailwind Config"
           >
+            <span>🍃</span>
             Copy Tailwind Config
+            {copied && <span className="af-ghost-tip" aria-hidden>✓ Copied</span>}
           </button>
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr auto",
-          gap: "var(--af-space-2)",
-          alignItems: "center",
-          marginTop: "var(--af-space-2)",
-        }}
-      >
-        <input
-          type="text"
-          value={wsUrl}
-          onChange={(e) => setWsUrl(e.target.value)}
-          placeholder="ws://localhost:4001"
-          style={{
-            border: "1px solid var(--af-color-neutral-300)",
-            borderRadius: "var(--af-radius-sm)",
-            padding: "0.25rem 0.5rem",
-          }}
-        />
-        <input
-          type="text"
-          value={room}
-          onChange={(e) => setRoom(e.target.value)}
-          placeholder="room"
-          style={{
-            border: "1px solid var(--af-color-neutral-300)",
-            borderRadius: "var(--af-radius-sm)",
-            padding: "0.25rem 0.5rem",
-          }}
-        />
-        <input
-          type="password"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder="token (optional)"
-          style={{
-            border: "1px solid var(--af-color-neutral-300)",
-            borderRadius: "var(--af-radius-sm)",
-            padding: "0.25rem 0.5rem",
-          }}
-        />
-        <button
-          onClick={connectWs}
-          style={{
-            padding: "0.25rem 0.5rem",
-            border: "1px solid var(--af-color-neutral-300)",
-            borderRadius: "var(--af-radius-sm)",
-            background: connected
-              ? "var(--af-color-success-500)"
-              : "transparent",
-            color: connected ? "white" : "inherit",
-          }}
-        >
-          {connected ? "Connected" : "Connect WS"}
-        </button>
-      </div>
-
+      <div className="af-studio-content">
+        <div className="af-grid-12 af-gap-3 af-items-center">
+          <div className="af-col-span-6">
+            <input
+              className={CONTROL_CLASS}
+              type="text"
+              value={wsUrl}
+              onChange={(e) => setWsUrl(e.target.value)}
+              placeholder="ws://localhost:4001"
+            />
+          </div>
+          <div className="af-col-span-3">
+            <input
+              className={CONTROL_CLASS}
+              type="text"
+              value={room}
+              onChange={(e) => setRoom(e.target.value)}
+              placeholder="room"
+            />
+          </div>
+          <div className="af-col-span-2">
+            <input
+              className={CONTROL_CLASS}
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="token (optional)"
+            />
+          </div>
+          <div className="af-col-span-1">
+            <button type="button" onClick={connectWs} className={BUTTON_OUTLINE_CLASS}>
+              {connected ? 'Connected' : 'Connect'}
+            </button>
+          </div>
+        </div>
       <Row label="Theme mode">
-        <select
-          value={theme}
-          onChange={(e) => setTheme(e.target.value as any)}
-          style={{
-            border: "1px solid var(--af-color-neutral-300)",
-            borderRadius: "var(--af-radius-sm)",
-            padding: "0.25rem 0.5rem",
-          }}
-        >
+        <select className={SELECT_CLASS} value={theme} onChange={(e) => setTheme(e.target.value as any)}>
           <option value="light">Light</option>
           <option value="dark">Dark</option>
           <option value="hc">High Contrast</option>
         </select>
       </Row>
 
+      <div className="mt-3">
+        <div className="text-sm text-muted-foreground mb-2">Room actions</div>
+        <div className="af-form-row af-cols-3">
+          <input
+            className={CONTROL_CLASS}
+            type="text"
+            placeholder="clone to room"
+            value={cloneRoom}
+            onChange={(e) => setCloneRoom(e.target.value)}
+          />
+          <button
+            type="button"
+            className={`${BUTTON_OUTLINE_CLASS} ${loadingTokens ? 'af-btn-loading' : ''}`}
+            disabled={loadingTokens}
+            onClick={() => loadFromServer()}
+          >
+            Load
+          </button>
+          <button
+            type="button"
+            className={`${BUTTON_PRIMARY_CLASS} ${saving ? 'af-btn-loading' : ''}`}
+            disabled={saving}
+            onClick={saveToServer}
+          >
+            {saving ? 'Saving…' : savedOk ? 'Saved ✓' : 'Save'}
+          </button>
+        </div>
+        <div className="grid" style={{ gridTemplateColumns: '1fr auto', gap: 'var(--af-space-2)', marginTop: 'var(--af-space-2)' }}>
+          <button
+            type="button"
+            onClick={async () => {
+              const base = apiFromWs(wsUrl);
+              const url = base ? `${base}/api/tokens?room=${encodeURIComponent(cloneRoom)}` : `/api/tokens?room=${encodeURIComponent(cloneRoom)}`;
+              try {
+                await fetch(url, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(tokens) });
+                try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'ok', msg: `Cloned to ${cloneRoom}` } })); } catch {}
+              } catch {
+                try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'err', msg: 'Clone failed' } })); } catch {}
+              }
+            }}
+            className={BUTTON_OUTLINE_CLASS}
+          >
+            Clone to room
+          </button>
+        </div>
+      </div>
+
       <Row label="Density">
-        <select
-          value={density}
-          onChange={(e) => setDensity(e.target.value as any)}
-          style={{
-            border: "1px solid var(--af-color-neutral-300)",
-            borderRadius: "var(--af-radius-sm)",
-            padding: "0.25rem 0.5rem",
-          }}
-        >
+        <select className={SELECT_CLASS} value={density} onChange={(e) => setDensity(e.target.value as any)}>
           <option value="comfortable">Comfortable</option>
           <option value="compact">Compact</option>
         </select>
@@ -471,29 +640,21 @@ export function ThemeStudio() {
           Palette
         </div>
         {(["primary", "neutral"] as const).map((role) => (
-          <div
-            key={role}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "120px repeat(6, minmax(0, 1fr))",
-              gap: "var(--af-space-2)",
-              alignItems: "center",
-              marginBottom: "var(--af-space-2)",
-            }}
-          >
-            <div style={{ color: "var(--af-color-neutral-500)" }}>{role}</div>
+          <div key={role} className="af-palette-grid" style={{ marginBottom: 'var(--af-space-2)' }}>
+            <div className="af-text-sm af-text-muted">{role}</div>
             {SHADE_KEYS.map((s) => (
-              <input
+              <ColorCell
                 key={s}
-                type="color"
                 value={(tokens.colors as any)[role]?.[s] || "#ffffff"}
-                onChange={(e) => setColor(role, s, e.target.value)}
+                onChange={(v) => setColor(role, s, v)}
               />
             ))}
           </div>
         ))}
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
           <button
+            type="button"
+            className={BUTTON_OUTLINE_CLASS}
             onClick={() =>
               applyPatch({
                 colors: {
@@ -504,15 +665,12 @@ export function ThemeStudio() {
                 } as any,
               })
             }
-            style={{
-              padding: "0.25rem 0.5rem",
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-            }}
           >
             Auto‑generate Primary Shades
           </button>
           <button
+            type="button"
+            className={BUTTON_OUTLINE_CLASS}
             onClick={() =>
               applyPatch({
                 colors: {
@@ -523,13 +681,38 @@ export function ThemeStudio() {
                 } as any,
               })
             }
-            style={{
-              padding: "0.25rem 0.5rem",
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-            }}
           >
             OKLCH Shades
+          </button>
+          <button
+            type="button"
+            className={BUTTON_OUTLINE_CLASS}
+            onClick={() => {
+              const invert = (hex: string) => {
+                try { const [l,a,b] = chroma(hex).lab(); return chroma.lab(Math.max(0, Math.min(100, 100 - l)), a, b).hex(); } catch { return hex; }
+              };
+              const mapScale = (scale: Record<string,string>) => Object.fromEntries(Object.entries(scale).map(([k,v]) => [k, invert(v as string)]));
+              const dark: any = {};
+              Object.entries(tokens.colors).forEach(([name, scale]) => { dark[name] = mapScale(scale as any); });
+              applyPatch({ modes: { ...(tokens.modes||{}), dark } as any });
+            }}
+          >
+            Derive Dark Mode
+          </button>
+          <button
+            type="button"
+            className={BUTTON_OUTLINE_CLASS}
+            onClick={() => {
+              const boost = (hex: string) => {
+                try { const c = chroma(hex); const [l,a,b] = c.lab(); const nl = l < 50 ? Math.max(15, l - 20) : Math.min(95, l + 20); return chroma.lab(nl,a,b).hex(); } catch { return hex; }
+              };
+              const mapScale = (scale: Record<string,string>) => Object.fromEntries(Object.entries(scale).map(([k,v]) => [k, boost(v as string)]));
+              const hc: any = {};
+              Object.entries(tokens.colors).forEach(([name, scale]) => { hc[name] = mapScale(scale as any); });
+              applyPatch({ modes: { ...(tokens.modes||{}), highContrast: hc } as any });
+            }}
+          >
+            Derive High‑Contrast
           </button>
           <input
             type="file"
@@ -537,12 +720,8 @@ export function ThemeStudio() {
             onChange={async (e) => {
               const f = e.target.files?.[0];
               if (!f) return;
-              try {
-                const txt = await f.text();
-                applyPatch(JSON.parse(txt));
-              } catch {
-                alert("Invalid JSON");
-              }
+              try { const txt = await f.text(); applyPatch(JSON.parse(txt)); window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'ok', msg: 'JSON applied' } })); }
+              catch { try { window.dispatchEvent(new CustomEvent('af:toast', { detail: { type: 'err', msg: 'Invalid JSON' } })); } catch {} }
             }}
           />
         </div>
@@ -552,32 +731,15 @@ export function ThemeStudio() {
         <div style={{ fontWeight: 600, marginBottom: "var(--af-space-2)" }}>
           Presets
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto",
-            gap: "var(--af-space-2)",
-          }}
-        >
+        <div className="af-form-row af-cols-2">
           <input
+            className={CONTROL_CLASS}
             type="text"
             placeholder="Preset name"
             value={presetName}
             onChange={(e) => setPresetName(e.target.value)}
-            style={{
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-              padding: "0.25rem 0.5rem",
-            }}
           />
-          <button
-            onClick={savePreset}
-            style={{
-              padding: "0.25rem 0.5rem",
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-            }}
-          >
+          <button type="button" className={BUTTON_OUTLINE_CLASS} onClick={savePreset}>
             Save Preset
           </button>
         </div>
@@ -589,15 +751,7 @@ export function ThemeStudio() {
             marginTop: "0.5rem",
           }}
         >
-          <select
-            value={presetKey}
-            onChange={(e) => setPresetKey(e.target.value)}
-            style={{
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-              padding: "0.25rem 0.5rem",
-            }}
-          >
+          <select className={SELECT_CLASS} value={presetKey} onChange={(e) => setPresetKey(e.target.value)}>
             <option value="">Select preset…</option>
             {Object.keys(
               (() => {
@@ -613,24 +767,10 @@ export function ThemeStudio() {
               </option>
             ))}
           </select>
-          <button
-            onClick={loadPreset}
-            style={{
-              padding: "0.25rem 0.5rem",
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-            }}
-          >
+          <button type="button" className={BUTTON_OUTLINE_CLASS} onClick={loadPreset}>
             Load
           </button>
-          <button
-            onClick={deletePreset}
-            style={{
-              padding: "0.25rem 0.5rem",
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-            }}
-          >
+          <button type="button" className={BUTTON_OUTLINE_CLASS} onClick={deletePreset}>
             Delete
           </button>
         </div>
@@ -648,38 +788,64 @@ export function ThemeStudio() {
           Typography
         </div>
         <Row label={`Scale (${scale.toFixed(2)})`}>
-          <input
-            type="range"
-            min={1.05}
-            max={1.5}
-            step={0.01}
-            value={scale}
-            onChange={(e) =>
-              applyPatch({
-                typography: {
-                  ...tokens.typography,
-                  scale: Number(e.target.value),
-                } as any,
-              })
-            }
-          />
+          <div className="af-flex af-items-center af-gap-3">
+            <input
+              type="range"
+              min={1.05}
+              max={1.5}
+              step={0.01}
+              value={scale}
+              onChange={(e) =>
+                applyPatch({
+                  typography: {
+                    ...tokens.typography,
+                    scale: Number(e.target.value),
+                  } as any,
+                })
+              }
+              className="af-flex-1"
+            />
+            <input
+              aria-label="Scale"
+              type="number"
+              step={0.01}
+              value={Number(scale).toFixed(2)}
+              onChange={(e) =>
+                applyPatch({ typography: { ...tokens.typography, scale: Number(e.target.value) } as any })
+              }
+              className={`${CONTROL_CLASS} af-input-num`}
+            />
+          </div>
         </Row>
         <Row label={`Base size (rem) (${baseRem})`}>
-          <input
-            type="range"
-            min={0.75}
-            max={1.25}
-            step={0.01}
-            value={baseRem}
-            onChange={(e) =>
-              applyPatch({
-                typography: {
-                  ...tokens.typography,
-                  baseRem: Number(e.target.value),
-                } as any,
-              })
-            }
-          />
+          <div className="af-flex af-items-center af-gap-3">
+            <input
+              type="range"
+              min={0.75}
+              max={1.25}
+              step={0.01}
+              value={baseRem}
+              onChange={(e) =>
+                applyPatch({
+                  typography: {
+                    ...tokens.typography,
+                    baseRem: Number(e.target.value),
+                  } as any,
+                })
+              }
+              className="af-flex-1"
+            />
+            <input
+              aria-label="Base size rem"
+              type="number"
+              step={0.01}
+              value={Number(baseRem).toFixed(2)}
+              onChange={(e) =>
+                applyPatch({ typography: { ...tokens.typography, baseRem: Number(e.target.value) } as any })
+              }
+              className={`${CONTROL_CLASS} af-input-num`}
+            />
+          </div>
         </Row>
       </div>
 
@@ -716,6 +882,7 @@ export function ThemeStudio() {
               type="text"
               value={v}
               onChange={(e) => setRadius(k, e.target.value)}
+              className={CONTROL_CLASS}
             />
           </Row>
         ))}
@@ -731,6 +898,7 @@ export function ThemeStudio() {
               type="text"
               value={v}
               onChange={(e) => setShadow(k, e.target.value)}
+              className={CONTROL_CLASS}
             />
           </Row>
         ))}
@@ -743,46 +911,15 @@ export function ThemeStudio() {
           marginTop: "var(--af-space-4)",
         }}
       >
-        <div
-          style={{
-            fontSize: "var(--af-text-sm)",
-            color: "var(--af-color-neutral-500)",
-          }}
-        >
-          Preview
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gap: "var(--af-space-2)",
-            padding: "var(--af-space-4)",
-            border: "1px solid var(--af-color-neutral-300)",
-            borderRadius: "var(--af-radius-md)",
-          }}
-        >
-          <h1
-            style={{
-              fontSize: "var(--af-text-3xl)",
-              color: "var(--af-color-primary-700)",
-              margin: 0,
-            }}
-          >
-            Heading H1
-          </h1>
-          <p style={{ fontSize: "var(--af-text-base)", margin: 0 }}>
-            Body text scales with viewport width.
-          </p>
-          <button
-            style={{
-              backgroundColor: "var(--af-color-primary-500)",
-              color: "white",
-              padding: "0.5rem 1rem",
-              borderRadius: "var(--af-radius-md)",
-              border: 0,
-            }}
-          >
-            Button
-          </button>
+        <div className="text-sm text-muted-foreground">Preview</div>
+        <div className="af-preview-card">
+          <div className="af-preview-grid">
+            <h1 style={{ fontSize: 'var(--af-text-2xl)', color: 'var(--af-color-primary-700)', margin: 0 }}>Heading H1</h1>
+            <p style={{ fontSize: 'var(--af-text-base)', margin: 0, color: 'var(--af-color-neutral-700)' }}>Body text scales with viewport width.</p>
+            <button type="button" className={BUTTON_PRIMARY_CLASS} style={{ alignSelf: 'start' }}>
+              Button
+            </button>
+          </div>
         </div>
         <div
           style={{
@@ -801,13 +938,7 @@ export function ThemeStudio() {
             const passAA2 = c2 >= 4.5;
             return (
               <>
-                <div
-                  style={{
-                    border: "1px solid var(--af-color-neutral-300)",
-                    borderRadius: "var(--af-radius-sm)",
-                    padding: "0.75rem",
-                  }}
-                >
+                <div className="af-card-sm">
                   <div
                     style={{
                       background: n50,
@@ -823,6 +954,8 @@ export function ThemeStudio() {
                   </div>
                   {!passAA1 && (
                     <button
+                      type="button"
+                      className={`${BUTTON_OUTLINE_CLASS} mt-2`}
                       onClick={() =>
                         applyPatch({
                           colors: {
@@ -834,24 +967,12 @@ export function ThemeStudio() {
                           } as any,
                         })
                       }
-                      style={{
-                        marginTop: "0.25rem",
-                        padding: "0.25rem 0.5rem",
-                        border: "1px solid var(--af-color-neutral-300)",
-                        borderRadius: "var(--af-radius-sm)",
-                      }}
                     >
                       Auto-fix AAA
                     </button>
                   )}
                 </div>
-                <div
-                  style={{
-                    border: "1px solid var(--af-color-neutral-300)",
-                    borderRadius: "var(--af-radius-sm)",
-                    padding: "0.75rem",
-                  }}
-                >
+                <div className="af-card-sm">
                   <div
                     style={{
                       background: n900,
@@ -867,6 +988,8 @@ export function ThemeStudio() {
                   </div>
                   {!passAA2 && (
                     <button
+                      type="button"
+                      className={`${BUTTON_OUTLINE_CLASS} mt-2`}
                       onClick={() =>
                         applyPatch({
                           colors: {
@@ -878,12 +1001,6 @@ export function ThemeStudio() {
                           } as any,
                         })
                       }
-                      style={{
-                        marginTop: "0.25rem",
-                        padding: "0.25rem 0.5rem",
-                        border: "1px solid var(--af-color-neutral-300)",
-                        borderRadius: "var(--af-radius-sm)",
-                      }}
                     >
                       Auto-fix AAA
                     </button>
@@ -895,41 +1012,19 @@ export function ThemeStudio() {
           })()}
         </div>
         <div style={{ marginTop: "var(--af-space-2)" }}>
-          <button
-            onClick={() => setShowReport((s) => !s)}
-            style={{
-              padding: "0.25rem 0.5rem",
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-            }}
-          >
+          <button type="button" className={BUTTON_OUTLINE_CLASS} onClick={() => setShowReport((s) => !s)}>
             {showReport ? "Hide" : "Generate"} Report
           </button>
         </div>
         {showReport && (
-          <div
-            style={{
-              border: "1px solid var(--af-color-neutral-300)",
-              borderRadius: "var(--af-radius-sm)",
-              padding: "0.75rem",
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
-              Palette Report (ΔLCH and AA/AAA)
-            </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "140px repeat(4, minmax(0, 1fr))",
-                gap: "0.5rem",
-                fontSize: "var(--af-text-sm)",
-              }}
-            >
-              <div>Role</div>
-              <div>ΔLCH(700→500)</div>
-              <div>Contrast on Neutral 50</div>
-              <div>Contrast on Neutral 900</div>
-              <div>Notes</div>
+          <div className="af-card af-card-muted">
+            <div className="af-report-header" style={{ marginBottom: '0.5rem' }}>Palette Report (ΔLCH and AA/AAA)</div>
+            <div className="af-report-grid">
+              <div className="af-report-header">Role</div>
+              <div className="af-report-header">ΔLCH(700→500)</div>
+              <div className="af-report-header">Contrast on Neutral 50</div>
+              <div className="af-report-header">Contrast on Neutral 900</div>
+              <div className="af-report-header">Notes</div>
               {Object.keys(tokens.colors).map((role) => {
                 const r: any = (tokens.colors as any)[role];
                 const n: any = (tokens.colors as any).neutral || {};
@@ -959,25 +1054,18 @@ export function ThemeStudio() {
                   ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : "Fail";
                 return (
                   <React.Fragment key={role}>
-                    <div>{role}</div>
-                    <div>{d}</div>
-                    <div>
-                      {c1}:1 {tag(c1)}
-                    </div>
-                    <div>
-                      {c2}:1 {tag(c2)}
-                    </div>
-                    <div>
-                      {tag(c1) === "Fail" || tag(c2) === "Fail"
-                        ? "Consider auto-fix"
-                        : ""}
-                    </div>
+                    <div className="af-report-cell">{role}</div>
+                    <div className="af-report-cell">{d}</div>
+                    <div className="af-report-cell">{c1}:1 {tag(c1)}</div>
+                    <div className="af-report-cell">{c2}:1 {tag(c2)}</div>
+                    <div className="af-report-cell">{(tag(c1) === 'Fail' || tag(c2) === 'Fail') ? 'Consider auto-fix' : ''}</div>
                   </React.Fragment>
                 );
               })}
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
